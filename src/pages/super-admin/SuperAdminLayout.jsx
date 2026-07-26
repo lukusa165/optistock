@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import logo from '../../assets/logo.png'
 import { Icon } from '../../components/Icons.jsx'
@@ -6,13 +6,46 @@ import { supabase } from '../../lib/supabaseClient.js'
 
 export default function SuperAdminLayout() {
   const navigate = useNavigate()
-  const [etablissements, setEtablissements] = useState([])
+  const [etablissements, setEtablissementsRaw] = useState([])
+  const [loadingEtablissements, setLoadingEtablissements] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const [plans] = useState([
     { id: 1, nom: 'Essai gratuit', prix: 'Gratuit / 30 jours', vendeurs: 1, essaiGratuit: true },
     { id: 2, nom: 'Essentiel', prix: '9 000 F / mois', vendeurs: 2, essaiGratuit: false },
     { id: 3, nom: 'Pro', prix: '19 000 F / mois', vendeurs: 6, essaiGratuit: false },
     { id: 4, nom: 'Entreprise', prix: '39 000 F / mois', vendeurs: null, essaiGratuit: false },
   ])
+
+  const setEtablissements = (updater) => {
+    setEtablissementsRaw((list) => {
+      const next = typeof updater === 'function' ? updater(list) : updater
+      return (next || []).filter(Boolean)
+    })
+  }
+
+  const chargerEtablissements = async () => {
+    setLoadingEtablissements(true)
+    setLoadError('')
+
+    const { data, error } = await supabase
+      .from('etablissements')
+      .select('*')
+      .order('nom', { ascending: true })
+
+    if (error) {
+      console.error('Erreur chargement établissements:', error)
+      setLoadError("Impossible de charger les établissements : " + error.message)
+      setLoadingEtablissements(false)
+      return
+    }
+
+    setEtablissementsRaw((data || []).filter(Boolean))
+    setLoadingEtablissements(false)
+  }
+
+  useEffect(() => {
+    chargerEtablissements()
+  }, [])
 
   const navItems = [
     { to: '/super-admin/etablissements', label: "Gestion d'établissement", icon: 'Building' },
@@ -28,7 +61,6 @@ export default function SuperAdminLayout() {
   return (
     <div className="sa">
       <style>{`
-        /* ======== RESET GLOBAL (supprime l'espace à gauche) ======== */
         html, body {
           margin: 0 !important;
           padding: 0 !important;
@@ -66,7 +98,6 @@ export default function SuperAdminLayout() {
         body { background: var(--bg); }
         .sa { display: flex; min-height: 100vh; width: 100%; background: var(--bg); font-family: 'Inter', sans-serif; color: var(--text); }
 
-        /* ======== SIDEBAR ======== */
         .sidebar {
           width: 256px; flex-shrink: 0;
           background: var(--bg-2);
@@ -129,7 +160,6 @@ export default function SuperAdminLayout() {
         .logout-btn:hover { color: var(--danger); background: rgba(220,38,38,.06); }
         .logout-btn svg { width: 16px; height: 16px; }
 
-        /* ======== MAIN ======== */
         .main { flex: 1; padding: 28px 32px; overflow-x: hidden; }
 
         .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; flex-wrap: wrap; gap: 14px; }
@@ -154,7 +184,6 @@ export default function SuperAdminLayout() {
         .icon-btn:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-pale); }
         .notif-dot { position: absolute; top: 8px; right: 8px; width: 7px; height: 7px; border-radius: 50%; background: var(--danger); border: 1.5px solid var(--panel); }
 
-        /* ======== STAT CARDS ======== */
         .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 26px; }
         .stat-card {
           background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px;
@@ -168,12 +197,10 @@ export default function SuperAdminLayout() {
         .stat-value { font-family: 'Space Grotesk', sans-serif; font-size: 30px; font-weight: 700; color: var(--text); line-height: 1; }
         .stat-delta { font-size: 11.5px; color: var(--success); margin-top: 6px; font-weight: 500; }
 
-        /* ======== PANELS ======== */
         .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 22px; margin-bottom: 22px; box-shadow: var(--shadow); }
         .panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
         .panel-head h2 { font-family: 'Space Grotesk', sans-serif; font-size: 15px; font-weight: 700; color: var(--text); }
 
-        /* ======== BOUTONS ======== */
         .btn-primary {
           display: flex; align-items: center; gap: 7px; background: var(--accent); color: #fff; border: none;
           padding: 9px 16px; border-radius: 9px; font-size: 13px; font-weight: 600; cursor: pointer;
@@ -192,7 +219,6 @@ export default function SuperAdminLayout() {
         .btn-danger { background: var(--danger); color: #fff; border: none; padding: 9px 14px; border-radius: 9px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; }
         .btn-danger:hover { filter: brightness(1.08); }
 
-        /* ======== SOUS-ONGLETS ======== */
         .sub-tabs { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
         .sub-tab {
           padding: 7px 14px; border-radius: 20px; font-size: 12.5px; font-weight: 600;
@@ -202,7 +228,6 @@ export default function SuperAdminLayout() {
         .sub-tab:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-pale); }
         .sub-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); box-shadow: 0 2px 8px rgba(26,122,80,0.2); }
 
-        /* ======== CARTES CAPACITÉS ======== */
         .cap-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
         .cap-card {
           display: flex; flex-direction: column; gap: 12px; background: var(--panel-2);
@@ -216,7 +241,6 @@ export default function SuperAdminLayout() {
         .cap-card h4 { font-size: 12.5px; font-weight: 600; color: var(--text); }
         .cap-card p { font-size: 11.5px; color: var(--muted); line-height: 1.4; }
 
-        /* ======== TABLE ======== */
         table { width: 100%; border-collapse: collapse; }
         thead th {
           text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em;
@@ -239,14 +263,12 @@ export default function SuperAdminLayout() {
         .row-actions button:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-pale); }
         .row-actions .danger:hover { color: var(--danger); border-color: var(--danger); background: rgba(220,38,38,.06); }
 
-        /* ======== EMPTY STATE ======== */
         .empty-state { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 54px 20px; }
         .empty-icon { width: 56px; height: 56px; border-radius: 14px; background: var(--accent-pale); display: flex; align-items: center; justify-content: center; margin-bottom: 16px; }
         .empty-icon svg { width: 24px; height: 24px; color: var(--accent); }
         .empty-state h3 { color: var(--text); font-family: 'Space Grotesk', sans-serif; font-size: 15px; font-weight: 600; margin-bottom: 6px; }
         .empty-state p { font-size: 12.5px; color: var(--muted); max-width: 280px; margin-bottom: 18px; line-height: 1.5; }
 
-        /* ======== PLANS ======== */
         .plans-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 22px; }
         .plan-card { background: var(--panel-2); border: 1px solid var(--border); border-radius: 14px; padding: 18px; transition: box-shadow .15s, border-color .15s; }
         .plan-card:hover { box-shadow: var(--shadow-md); border-color: var(--accent); }
@@ -258,7 +280,6 @@ export default function SuperAdminLayout() {
         .plan-card .trial { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--accent); margin-top: 10px; font-weight: 600; }
         .plan-card .trial svg { width: 13px; height: 13px; }
 
-        /* ======== SETTINGS ======== */
         .settings-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
         .setting-card { display: flex; gap: 14px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 14px; padding: 18px; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
         .setting-card:hover { border-color: var(--accent); box-shadow: var(--shadow-md); }
@@ -267,7 +288,6 @@ export default function SuperAdminLayout() {
         .setting-card h4 { font-size: 13.5px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
         .setting-card p { font-size: 12px; color: var(--muted); line-height: 1.4; }
 
-        /* ======== MODAL ======== */
         .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.25); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 20px; }
         .modal { width: 100%; max-width: 440px; background: var(--panel); border: 1px solid var(--border); border-radius: 18px; padding: 26px; box-shadow: 0 20px 50px rgba(0,0,0,0.15); }
         .modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
@@ -286,11 +306,9 @@ export default function SuperAdminLayout() {
         .m-field .hint { font-size: 11px; color: var(--muted); margin-top: 5px; }
         .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
 
-        /* ======== ALERTES ======== */
         .alert-success { background: #F0FDF4; border: 1px solid #BBF7D0; color: #15803D; padding: 12px 14px; border-radius: 10px; font-size: 12.5px; margin-bottom: 16px; display: flex; align-items: flex-start; gap: 8px; }
         .alert-error { background: #FEF2F2; border: 1px solid #FECACA; color: #DC2626; padding: 12px 14px; border-radius: 10px; font-size: 12.5px; margin-bottom: 16px; }
 
-        /* ======== IDENTIFIANTS GÉNÉRÉS ======== */
         .credentials-box { background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 12px; padding: 18px; margin-bottom: 22px; }
         .credentials-box .cred-title { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; color: #15803D; margin-bottom: 6px; }
         .credentials-box .cred-sub { font-size: 12px; color: #166534; margin-bottom: 14px; line-height: 1.5; }
@@ -313,7 +331,6 @@ export default function SuperAdminLayout() {
         }
       `}</style>
 
-      {/* ======== SIDEBAR ======== */}
       <aside className="sidebar">
         <div className="sidebar-top">
           <div className="sa-brand">
@@ -357,7 +374,6 @@ export default function SuperAdminLayout() {
         </div>
       </aside>
 
-      {/* ======== MAIN ======== */}
       <main className="main">
         <div className="topbar">
           <div className="topbar-left">
@@ -376,14 +392,15 @@ export default function SuperAdminLayout() {
           </div>
         </div>
 
-        {/* Statistiques */}
+        {loadError && <div className="alert-error">⚠️ {loadError}</div>}
+
         <div className="stats-grid">
           <div className="stat-card">
             <div className="stat-header">
               <div className="stat-label">Établissements</div>
               <div className="stat-icon"><Icon.Building /></div>
             </div>
-            <div className="stat-value">{etablissements.length}</div>
+            <div className="stat-value">{loadingEtablissements ? '…' : etablissements.length}</div>
             <div className="stat-delta">Total enregistré</div>
           </div>
           <div className="stat-card">
@@ -391,7 +408,7 @@ export default function SuperAdminLayout() {
               <div className="stat-label">Actifs</div>
               <div className="stat-icon"><Icon.Power /></div>
             </div>
-            <div className="stat-value">{etablissements.filter(e => e.statut === 'Actif').length}</div>
+            <div className="stat-value">{loadingEtablissements ? '…' : etablissements.filter(e => e?.statut === 'Actif').length}</div>
             <div className="stat-delta">Comptes en service</div>
           </div>
           <div className="stat-card">
@@ -399,7 +416,7 @@ export default function SuperAdminLayout() {
               <div className="stat-label">Désactivés</div>
               <div className="stat-icon"><Icon.ToggleLeft /></div>
             </div>
-            <div className="stat-value">{etablissements.filter(e => e.statut === 'Désactivé').length}</div>
+            <div className="stat-value">{loadingEtablissements ? '…' : etablissements.filter(e => e?.statut === 'Désactivé').length}</div>
             <div className="stat-delta" style={{ color: 'var(--warning)' }}>À surveiller</div>
           </div>
           <div className="stat-card">

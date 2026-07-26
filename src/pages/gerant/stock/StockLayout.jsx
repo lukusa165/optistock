@@ -1,21 +1,15 @@
 import { NavLink, Outlet, useOutletContext } from 'react-router-dom'
 
-const tabs = [
-  { to: 'entree', label: 'Entrée de stock' },
-  { to: 'inventaire', label: 'Inventaire' },
-  { to: 'ajustements', label: 'Ajustements & corrections' },
-]
-
 export default function StockLayout() {
-  const ctx = useOutletContext()
+  const context = useOutletContext()
   return (
     <>
       <div className="sub-tabs">
-        {tabs.map((t) => (
-          <NavLink key={t.to} to={t.to} className={({ isActive }) => `sub-tab ${isActive ? 'active' : ''}`}>{t.label}</NavLink>
-        ))}
+        <NavLink to="entree" className={({ isActive }) => `sub-tab ${isActive ? 'active' : ''}`}>Entrée de stock</NavLink>
+        <NavLink to="inventaire" className={({ isActive }) => `sub-tab ${isActive ? 'active' : ''}`}>Inventaire</NavLink>
+        <NavLink to="ajustements" className={({ isActive }) => `sub-tab ${isActive ? 'active' : ''}`}>Ajustements</NavLink>
       </div>
-      <Outlet context={ctx} />
+      <Outlet context={context} />
     </>
   )
 }

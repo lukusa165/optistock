@@ -1,103 +1,145 @@
 import { useState, useEffect } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import { Icon } from '../../../components/Icons.jsx'
 import { supabase } from '../../../lib/supabaseClient.js'
+import { logAction } from '../../../lib/historique.js'
+import { Icon } from '../../../components/Icons.jsx'
 
 export default function EntreeStock() {
-  const { etablissement } = useOutletContext()
+  const { etablissement, gerant, chargementTermine } = useOutletContext()
   const [articles, setArticles] = useState([])
-  const [form, setForm] = useState({ article_id: '', quantite: '', note: '' })
-  const [loading, setLoading] = useState(false)
-  const [success, setSuccess] = useState('')
+  const [recherche, setRecherche] = useState('')
+  const [suggestions, setSuggestions] = useState([])
+  const [selection, setSelection] = useState(null)
+  const [quantite, setQuantite] = useState('')
   const [error, setError] = useState('')
-  const [articleSelectionne, setArticleSelectionne] = useState(null)
+  const [succes, setSucces] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  useEffect(() => { if (etablissement) chargerArticles() }, [etablissement])
+  useEffect(() => {
+    if (chargementTermine && etablissement) charger()
+  }, [chargementTermine, etablissement])
 
-  const chargerArticles = async () => {
-    const { data } = await supabase.from('articles').select('id, nom, reference, quantite').eq('etablissement_id', etablissement.id).order('nom')
+  const charger = async () => {
+    const { data } = await supabase
+      .from('articles')
+      .select('id, nom, quantite, emplacement')
+      .eq('etablissement_id', etablissement.id)
+      .order('nom', { ascending: true })
     setArticles(data || [])
   }
 
-  const selectArticle = (id) => {
-    const a = articles.find(x => x.id === id)
-    setArticleSelectionne(a || null)
-    setForm({ ...form, article_id: id })
+  const onRecherche = (val) => {
+    setRecherche(val)
+    setSelection(null)
+    if (val.trim().length < 1) { setSuggestions([]); return }
+    setSuggestions(articles.filter((a) => a.nom.toLowerCase().includes(val.toLowerCase())).slice(0, 6))
+  }
+
+  const choisir = (a) => {
+    setSelection(a)
+    setRecherche(a.nom)
+    setSuggestions([])
   }
 
   const submit = async (e) => {
     e.preventDefault()
     setError('')
+    setSucces('')
+
+    if (!selection) { setError('Sélectionnez un article dans la liste.'); return }
+    const qte = Number(quantite)
+    if (!qte || qte <= 0) { setError('Saisissez une quantité valide.'); return }
+
     setLoading(true)
 
-    const qte = parseInt(form.quantite)
-    const qtAvant = articleSelectionne.quantite
-    const qtApres = qtAvant + qte
+    const nouvelleQuantite = selection.quantite + qte
 
-    await supabase.from('articles').update({ quantite: qtApres, updated_at: new Date() }).eq('id', form.article_id)
-    await supabase.from('stock_mouvements').insert({
+    const { error: updateError } = await supabase
+      .from('articles')
+      .update({ quantite: nouvelleQuantite, updated_at: new Date().toISOString() })
+      .eq('id', selection.id)
+
+    if (updateError) {
+      setError(`Erreur : ${updateError.message}`)
+      setLoading(false)
+      return
+    }
+
+    await logAction({
       etablissement_id: etablissement.id,
-      article_id: form.article_id,
-      nom_article: articleSelectionne.nom,
-      type: 'entree',
-      quantite: qte,
-      quantite_avant: qtAvant,
-      quantite_apres: qtApres,
-      note: form.note || null,
+      user_id: gerant.id,
+      user_nom: gerant.nom_complet,
+      type: 'entree_stock',
+      description: `Entrée de stock — ${selection.nom} : +${qte} (nouveau total : ${nouvelleQuantite})`,
     })
 
-    setArticles(prev => prev.map(a => a.id === form.article_id ? { ...a, quantite: qtApres } : a))
-    setSuccess(`Stock mis à jour : ${articleSelectionne.nom} → ${qtAvant} + ${qte} = ${qtApres} unités.`)
-    setForm({ article_id: '', quantite: '', note: '' })
-    setArticleSelectionne(null)
+    setSucces(`✓ Stock mis à jour : ${selection.nom} a maintenant ${nouvelleQuantite} unité(s).`)
+    setArticles((list) => list.map((a) => (a.id === selection.id ? { ...a, quantite: nouvelleQuantite } : a)))
+    setSelection(null)
+    setRecherche('')
+    setQuantite('')
     setLoading(false)
-    setTimeout(() => setSuccess(''), 4000)
+    setTimeout(() => setSucces(''), 3000)
   }
 
   return (
     <div className="panel" style={{ maxWidth: 480 }}>
-      <div className="panel-head"><h2>Enregistrer une entrée de stock</h2></div>
-      {success && <div className="alert-success">✓ {success}</div>}
+      <div className="panel-head">
+        <h2>Entrée de stock</h2>
+        <div className="cap-icon"><Icon.Database /></div>
+      </div>
+
+      {succes && <div className="alert-success">{succes}</div>}
       {error && <div className="alert-error">{error}</div>}
 
       <form onSubmit={submit}>
-        <div className="m-field">
-          <label>Article</label>
-          <select value={form.article_id} onChange={(e) => selectArticle(e.target.value)} required>
-            <option value="">-- Sélectionner un article --</option>
-            {articles.map((a) => (
-              <option key={a.id} value={a.id}>{a.nom} — Stock actuel : {a.quantite}</option>
-            ))}
-          </select>
+        <div className="m-field" style={{ position: 'relative' }}>
+          <label>Article à réapprovisionner</label>
+          <input
+            value={recherche}
+            onChange={(e) => onRecherche(e.target.value)}
+            placeholder="Tapez le nom de l'article..."
+            required
+          />
+          {suggestions.length > 0 && (
+            <div style={{
+              position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4,
+              background: '#fff', border: '1px solid var(--border)', borderRadius: 9,
+              boxShadow: '0 8px 20px rgba(0,0,0,0.1)', zIndex: 10, overflow: 'hidden',
+            }}>
+              {suggestions.map((a) => (
+                <div
+                  key={a.id}
+                  onMouseDown={(e) => { e.preventDefault(); choisir(a) }}
+                  style={{ padding: '10px 13px', cursor: 'pointer', borderBottom: '1px solid var(--border)', fontSize: 12.5 }}
+                >
+                  <div style={{ fontWeight: 600, color: 'var(--text)' }}>{a.nom}</div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)' }}>{a.quantite} en stock actuellement · {a.emplacement || 'Sans emplacement'}</div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
-        {articleSelectionne && (
-          <div style={{ background: 'var(--accent-pale)', border: '1px solid rgba(26,122,80,.2)', borderRadius: 8, padding: 10, marginBottom: 11, fontSize: 12 }}>
-            <strong>{articleSelectionne.nom}</strong>
-            <div style={{ color: 'var(--muted)', marginTop: 2 }}>
-              Réf : {articleSelectionne.reference} · Stock actuel : <strong>{articleSelectionne.quantite}</strong>
+        {selection && (
+          <div className="plan-limit" style={{ marginBottom: 14 }}>
+            <div className="plan-limit-text">
+              Stock actuel : <strong>{selection.quantite}</strong> unité(s)
             </div>
           </div>
         )}
 
         <div className="m-field">
-          <label>Quantité à ajouter</label>
-          <input type="number" min="1" step="1" value={form.quantite} onChange={(e) => setForm({ ...form, quantite: e.target.value })} placeholder="Ex : 50" required />
-          {form.quantite && articleSelectionne && (
-            <div className="hint" style={{ color: 'var(--success)' }}>
-              Nouveau stock : {articleSelectionne.quantite + parseInt(form.quantite || 0)} unités
-            </div>
+          <label>Quantité reçue</label>
+          <input type="number" min="1" value={quantite} onChange={(e) => setQuantite(e.target.value)} placeholder="Ex : 20" required />
+          {selection && quantite > 0 && (
+            <div className="hint">Nouveau stock après entrée : <strong>{selection.quantite + Number(quantite)}</strong></div>
           )}
         </div>
 
-        <div className="m-field">
-          <label>Note (optionnel)</label>
-          <input value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} placeholder="Ex : Livraison fournisseur Diallo & Fils" />
-        </div>
-
         <button type="submit" className="btn-primary" style={{ width: '100%', justifyContent: 'center' }} disabled={loading}>
-          <Icon.Database />
-          {loading ? 'Enregistrement...' : 'Enregistrer l\'entrée'}
+          <Icon.Plus />
+          {loading ? 'Enregistrement...' : 'Valider l\'entrée de stock'}
         </button>
       </form>
     </div>

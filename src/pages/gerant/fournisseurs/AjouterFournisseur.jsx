@@ -1,49 +1,69 @@
 import { useState } from 'react'
-import { useOutletContext } from 'react-router-dom'
-import { Icon } from '../../../components/Icons.jsx'
+import { useOutletContext, useNavigate } from 'react-router-dom'
 import { supabase } from '../../../lib/supabaseClient.js'
+import { Icon } from '../../../components/Icons.jsx'
 
-const emptyForm = { nom: '', telephone: '', adresse: '', email: '', contact_personne: '' }
+const emptyForm = { nom: '', telephone: '', adresse: '', produits_fournis: '' }
 
 export default function AjouterFournisseur() {
   const { etablissement } = useOutletContext()
+  const navigate = useNavigate()
   const [form, setForm] = useState(emptyForm)
   const [loading, setLoading] = useState(false)
-  const [success, setSuccess] = useState('')
   const [error, setError] = useState('')
 
   const submit = async (e) => {
     e.preventDefault()
-    setLoading(true)
     setError('')
-    const { error: err } = await supabase.from('fournisseurs').insert({ etablissement_id: etablissement.id, ...form })
-    setLoading(false)
-    if (err) { setError(err.message); return }
-    setSuccess('Fournisseur ajouté avec succès.')
-    setForm(emptyForm)
-    setTimeout(() => setSuccess(''), 3000)
+    if (!form.nom.trim()) { setError('Le nom du fournisseur est requis.'); return }
+    setLoading(true)
+
+    const { error: insertError } = await supabase.from('fournisseurs').insert({
+      etablissement_id: etablissement.id,
+      nom: form.nom.trim(),
+      telephone: form.telephone.trim() || null,
+      adresse: form.adresse.trim() || null,
+      produits_fournis: form.produits_fournis.trim() || null,
+    })
+
+    if (insertError) {
+      setError(`Erreur : ${insertError.message}`)
+      setLoading(false)
+      return
+    }
+
+    navigate('/gerant/fournisseurs/liste')
   }
 
   return (
     <div className="panel" style={{ maxWidth: 480 }}>
-      <div className="panel-head"><h2>Ajouter un fournisseur</h2></div>
-      {success && <div className="alert-success">✓ {success}</div>}
+      <div className="panel-head">
+        <h2>Ajouter un fournisseur</h2>
+        <div className="cap-icon"><Icon.Headset /></div>
+      </div>
+
       {error && <div className="alert-error">{error}</div>}
+
       <form onSubmit={submit}>
-        <div className="m-field"><label>Nom du fournisseur</label>
-          <input value={form.nom} onChange={(e) => setForm({ ...form, nom: e.target.value })} placeholder="Ex : Diallo & Fils Import" required /></div>
-        <div className="m-row">
-          <div className="m-field"><label>Téléphone</label>
-            <input value={form.telephone} onChange={(e) => setForm({ ...form, telephone: e.target.value })} placeholder="+221 77 000 00 00" /></div>
-          <div className="m-field"><label>Email</label>
-            <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="contact@fournisseur.com" /></div>
+        <div className="m-field">
+          <label>Nom du fournisseur</label>
+          <input value={form.nom} onChange={(e) => setForm({ ...form, nom: e.target.value })} placeholder="Ex : Grossiste Diallo & Fils" required />
         </div>
-        <div className="m-field"><label>Adresse</label>
-          <input value={form.adresse} onChange={(e) => setForm({ ...form, adresse: e.target.value })} placeholder="Ex : Rue 10 Dakar" /></div>
-        <div className="m-field"><label>Personne de contact</label>
-          <input value={form.contact_personne} onChange={(e) => setForm({ ...form, contact_personne: e.target.value })} placeholder="Ex : M. Moussa Diallo" /></div>
+        <div className="m-field">
+          <label>Téléphone</label>
+          <input value={form.telephone} onChange={(e) => setForm({ ...form, telephone: e.target.value })} placeholder="Ex : 0812345678" />
+        </div>
+        <div className="m-field">
+          <label>Adresse</label>
+          <input value={form.adresse} onChange={(e) => setForm({ ...form, adresse: e.target.value })} placeholder="Ex : Marché central, Kinshasa" />
+        </div>
+        <div className="m-field">
+          <label>Produits fournis</label>
+          <textarea value={form.produits_fournis} onChange={(e) => setForm({ ...form, produits_fournis: e.target.value })} placeholder="Ex : Conserves, boissons, produits d'hygiène" />
+        </div>
         <button type="submit" className="btn-primary" style={{ width: '100%', justifyContent: 'center' }} disabled={loading}>
-          <Icon.Plus />{loading ? 'Enregistrement...' : 'Ajouter le fournisseur'}
+          <Icon.Plus />
+          {loading ? 'Ajout en cours...' : 'Ajouter le fournisseur'}
         </button>
       </form>
     </div>

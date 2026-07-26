@@ -1,231 +1,165 @@
 import { useState, useEffect } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import { Icon } from '../../../components/Icons.jsx'
 import { supabase } from '../../../lib/supabaseClient.js'
 import { logAction } from '../../../lib/historique.js'
-import ConfirmPassword from '../../../components/ConfirmPassword.jsx'
+import { Icon } from '../../../components/Icons.jsx'
+
+const MOTIFS = ['Casse / produit endommagé', 'Erreur de comptage', 'Produit périmé', 'Vol / perte', 'Correction manuelle', 'Autre']
 
 export default function Ajustements() {
-  const { etablissement, gerant } = useOutletContext()
+  const { etablissement, gerant, chargementTermine } = useOutletContext()
   const [articles, setArticles] = useState([])
-  const [form, setForm] = useState({ article_id: '', type: 'ajustement', quantite: '', sens: '+', raison: '' })
-  const [articleSelectionne, setArticleSelectionne] = useState(null)
-  const [mouvements, setMouvements] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [confirm, setConfirm] = useState(false)
-  const [success, setSuccess] = useState('')
+  const [recherche, setRecherche] = useState('')
+  const [suggestions, setSuggestions] = useState([])
+  const [selection, setSelection] = useState(null)
+  const [nouvelleQuantite, setNouvelleQuantite] = useState('')
+  const [motif, setMotif] = useState(MOTIFS[0])
   const [error, setError] = useState('')
-
-  const RAISONS = [
-    'Produit abîmé / cassé', 'Perte ou vol', 'Produit périmé',
-    'Erreur de saisie précédente', 'Don / offert', 'Retour fournisseur', 'Autre',
-  ]
+  const [succes, setSucces] = useState('')
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    if (etablissement) { chargerArticles(); chargerMouvements() }
-  }, [etablissement])
+    if (chargementTermine && etablissement) charger()
+  }, [chargementTermine, etablissement])
 
-  const chargerArticles = async () => {
-    const { data } = await supabase.from('articles').select('id, nom, reference, quantite').eq('etablissement_id', etablissement.id).order('nom')
+  const charger = async () => {
+    const { data } = await supabase
+      .from('articles')
+      .select('id, nom, quantite, emplacement')
+      .eq('etablissement_id', etablissement.id)
+      .order('nom', { ascending: true })
     setArticles(data || [])
   }
 
-  const chargerMouvements = async () => {
-    const { data } = await supabase
-      .from('stock_mouvements')
-      .select('*, articles(nom)')
-      .eq('etablissement_id', etablissement.id)
-      .in('type', ['ajustement', 'correction'])
-      .order('created_at', { ascending: false })
-      .limit(50)
-    setMouvements(data || [])
+  const onRecherche = (val) => {
+    setRecherche(val)
+    setSelection(null)
+    if (val.trim().length < 1) { setSuggestions([]); return }
+    setSuggestions(articles.filter((a) => a.nom.toLowerCase().includes(val.toLowerCase())).slice(0, 6))
   }
 
-  const selectArticle = (id) => {
-    const a = articles.find(x => x.id === id)
-    setArticleSelectionne(a || null)
-    setForm({ ...form, article_id: id })
+  const choisir = (a) => {
+    setSelection(a)
+    setRecherche(a.nom)
+    setSuggestions([])
+    setNouvelleQuantite(String(a.quantite))
   }
 
-  const nouveauStock = () => {
-    if (!articleSelectionne || !form.quantite) return null
-    const qte = parseInt(form.quantite)
-    return form.sens === '+' ? articleSelectionne.quantite + qte : Math.max(0, articleSelectionne.quantite - qte)
-  }
-
-  const soumettre = (e) => {
+  const submit = async (e) => {
     e.preventDefault()
     setError('')
-    if (!form.raison) { setError('Veuillez sélectionner une raison.'); return }
-    setConfirm(true)
-  }
+    setSucces('')
 
-  const appliquer = async () => {
-    setConfirm(false)
+    if (!selection) { setError('Sélectionnez un article dans la liste.'); return }
+    const nouvelle = Number(nouvelleQuantite)
+    if (nouvelle < 0 || nouvelleQuantite === '') { setError('Saisissez une quantité valide (0 ou plus).'); return }
+    if (nouvelle === selection.quantite) { setError('La quantité saisie est identique au stock actuel.'); return }
+
     setLoading(true)
 
-    const qtAvant = articleSelectionne.quantite
-    const qte = parseInt(form.quantite)
-    const qtApres = nouveauStock()
-    const diff = form.sens === '+' ? qte : -qte
+    const ecart = nouvelle - selection.quantite
 
-    await supabase.from('articles').update({ quantite: qtApres, updated_at: new Date() }).eq('id', form.article_id)
-    await supabase.from('stock_mouvements').insert({
-      etablissement_id: etablissement.id,
-      article_id: form.article_id,
-      nom_article: articleSelectionne.nom,
-      type: 'ajustement',
-      quantite: qte,
-      quantite_avant: qtAvant,
-      quantite_apres: qtApres,
-      note: form.raison,
-      user_id: gerant.id,
-    })
+    const { error: updateError } = await supabase
+      .from('articles')
+      .update({ quantite: nouvelle, updated_at: new Date().toISOString() })
+      .eq('id', selection.id)
+
+    if (updateError) {
+      setError(`Erreur : ${updateError.message}`)
+      setLoading(false)
+      return
+    }
 
     await logAction({
       etablissement_id: etablissement.id,
       user_id: gerant.id,
       user_nom: gerant.nom_complet,
-      type: 'modification_stock',
-      description: `Ajustement "${articleSelectionne.nom}" : ${qtAvant} → ${qtApres} (${diff > 0 ? '+' : ''}${diff}) — ${form.raison}`,
-      meta: { article_id: form.article_id, avant: qtAvant, apres: qtApres, raison: form.raison },
+      type: 'ajustement_stock',
+      description: `Ajustement — ${selection.nom} : ${selection.quantite} → ${nouvelle} (${ecart > 0 ? '+' : ''}${ecart}). Motif : ${motif}`,
     })
 
-    setArticles(prev => prev.map(a => a.id === form.article_id ? { ...a, quantite: qtApres } : a))
-    setSuccess(`Ajustement effectué : "${articleSelectionne.nom}" → ${qtApres} unités.`)
-    setForm({ article_id: '', type: 'ajustement', quantite: '', sens: '+', raison: '' })
-    setArticleSelectionne(null)
-    chargerMouvements()
+    setSucces(`✓ Stock ajusté : ${selection.nom} est maintenant à ${nouvelle} unité(s).`)
+    setArticles((list) => list.map((a) => (a.id === selection.id ? { ...a, quantite: nouvelle } : a)))
+    setSelection(null)
+    setRecherche('')
+    setNouvelleQuantite('')
     setLoading(false)
-    setTimeout(() => setSuccess(''), 4000)
+    setTimeout(() => setSucces(''), 3000)
   }
 
   return (
-    <>
-      {success && <div className="alert-success">✓ {success}</div>}
+    <div className="panel" style={{ maxWidth: 480 }}>
+      <div className="panel-head">
+        <h2>Ajustement de stock</h2>
+        <div className="cap-icon"><Icon.Wrench /></div>
+      </div>
+
+      <div className="hint" style={{ marginBottom: 16 }}>
+        À utiliser pour corriger le stock suite à une casse, une perte, une péremption ou une erreur de comptage — pas pour une vente normale.
+      </div>
+
+      {succes && <div className="alert-success">{succes}</div>}
       {error && <div className="alert-error">{error}</div>}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        {/* Formulaire ajustement */}
-        <div className="panel">
-          <div className="panel-head"><h2>Ajustement / Correction de stock</h2></div>
-
-          <div style={{ background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: 8, padding: '10px 12px', marginBottom: 14, fontSize: 12, color: '#DC2626', lineHeight: 1.5 }}>
-            ⚠️ Les ajustements manuels sont des opérations sensibles. Ils seront tracés dans l'historique avec votre confirmation.
-          </div>
-
-          <form onSubmit={soumettre}>
-            <div className="m-field">
-              <label>Article</label>
-              <select value={form.article_id} onChange={(e) => selectArticle(e.target.value)} required>
-                <option value="">-- Sélectionner un article --</option>
-                {articles.map((a) => (
-                  <option key={a.id} value={a.id}>{a.nom} — Stock : {a.quantite}</option>
-                ))}
-              </select>
-            </div>
-
-            {articleSelectionne && (
-              <div style={{ background: 'var(--accent-pale)', border: '1px solid rgba(26,122,80,.2)', borderRadius: 8, padding: 10, marginBottom: 12 }}>
-                <div style={{ fontSize: 12.5, fontWeight: 600 }}>{articleSelectionne.nom}</div>
-                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
-                  Stock actuel : <strong style={{ color: 'var(--text)' }}>{articleSelectionne.quantite}</strong>
+      <form onSubmit={submit}>
+        <div className="m-field" style={{ position: 'relative' }}>
+          <label>Article concerné</label>
+          <input
+            value={recherche}
+            onChange={(e) => onRecherche(e.target.value)}
+            placeholder="Tapez le nom de l'article..."
+            required
+          />
+          {suggestions.length > 0 && (
+            <div style={{
+              position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4,
+              background: '#fff', border: '1px solid var(--border)', borderRadius: 9,
+              boxShadow: '0 8px 20px rgba(0,0,0,0.1)', zIndex: 10, overflow: 'hidden',
+            }}>
+              {suggestions.map((a) => (
+                <div
+                  key={a.id}
+                  onMouseDown={(e) => { e.preventDefault(); choisir(a) }}
+                  style={{ padding: '10px 13px', cursor: 'pointer', borderBottom: '1px solid var(--border)', fontSize: 12.5 }}
+                >
+                  <div style={{ fontWeight: 600, color: 'var(--text)' }}>{a.nom}</div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)' }}>{a.quantite} en stock actuellement</div>
                 </div>
-              </div>
-            )}
-
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 10 }}>
-              <div className="m-field">
-                <label>Sens</label>
-                <select value={form.sens} onChange={(e) => setForm({ ...form, sens: e.target.value })}>
-                  <option value="+">➕ Ajouter</option>
-                  <option value="-">➖ Retirer</option>
-                </select>
-              </div>
-              <div className="m-field">
-                <label>Quantité</label>
-                <input
-                  type="number"
-                  min="1"
-                  step="1"
-                  value={form.quantite}
-                  onChange={(e) => setForm({ ...form, quantite: e.target.value })}
-                  placeholder="Ex : 10"
-                  required
-                />
-              </div>
-            </div>
-
-            {articleSelectionne && form.quantite && (
-              <div style={{ fontSize: 12, marginBottom: 12, padding: '8px 12px', background: 'var(--panel-2)', borderRadius: 8, border: '1px solid var(--border)' }}>
-                Nouveau stock prévu : <strong style={{ color: 'var(--accent)', fontSize: 14 }}>{nouveauStock()}</strong>
-              </div>
-            )}
-
-            <div className="m-field">
-              <label>Raison de l'ajustement</label>
-              <select value={form.raison} onChange={(e) => setForm({ ...form, raison: e.target.value })} required>
-                <option value="">-- Sélectionner une raison --</option>
-                {RAISONS.map((r) => <option key={r} value={r}>{r}</option>)}
-              </select>
-            </div>
-
-            <button type="submit" className="btn-primary" style={{ width: '100%', justifyContent: 'center' }} disabled={loading}>
-              <Icon.Database />
-              {loading ? 'Application...' : 'Appliquer l\'ajustement'}
-            </button>
-          </form>
-        </div>
-
-        {/* Historique ajustements */}
-        <div className="panel">
-          <div className="panel-head"><h2>Historique des ajustements</h2></div>
-          {mouvements.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-icon"><Icon.Database /></div>
-              <h3>Aucun ajustement</h3>
-              <p>Les ajustements apparaîtront ici.</p>
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {mouvements.map((m) => {
-                const diff = m.quantite_apres - m.quantite_avant
-                return (
-                  <div key={m.id} style={{ background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div>
-                        <div style={{ fontSize: 12.5, fontWeight: 600 }}>{m.nom_article || m.articles?.nom}</div>
-                        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{m.note}</div>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: diff > 0 ? '#2563EB' : '#DC2626' }}>
-                          {diff > 0 ? `+${diff}` : diff}
-                        </div>
-                        <div style={{ fontSize: 10.5, color: 'var(--muted)' }}>
-                          {m.quantite_avant} → {m.quantite_apres}
-                        </div>
-                      </div>
-                    </div>
-                    <div style={{ fontSize: 10.5, color: 'var(--muted)', marginTop: 6, fontFamily: 'JetBrains Mono, monospace' }}>
-                      {new Date(m.created_at).toLocaleString('fr-FR')}
-                    </div>
-                  </div>
-                )
-              })}
+              ))}
             </div>
           )}
         </div>
-      </div>
 
-      {confirm && (
-        <ConfirmPassword
-          gerant={gerant}
-          titre="Confirmer l'ajustement"
-          description={`Vous êtes sur le point de modifier le stock de "${articleSelectionne?.nom}" : ${articleSelectionne?.quantite} → ${nouveauStock()}. Cette action sera tracée.`}
-          onConfirm={appliquer}
-          onCancel={() => setConfirm(false)}
-        />
-      )}
-    </>
+        {selection && (
+          <div className="plan-limit" style={{ marginBottom: 14 }}>
+            <div className="plan-limit-text">Stock actuel : <strong>{selection.quantite}</strong> unité(s)</div>
+          </div>
+        )}
+
+        <div className="m-field">
+          <label>Nouvelle quantité réelle</label>
+          <input type="number" min="0" value={nouvelleQuantite} onChange={(e) => setNouvelleQuantite(e.target.value)} placeholder="Ex : 12" required />
+          {selection && nouvelleQuantite !== '' && (
+            <div className="hint">
+              Écart : <strong style={{ color: Number(nouvelleQuantite) - selection.quantite < 0 ? 'var(--danger)' : 'var(--success)' }}>
+                {Number(nouvelleQuantite) - selection.quantite > 0 ? '+' : ''}{Number(nouvelleQuantite) - selection.quantite}
+              </strong>
+            </div>
+          )}
+        </div>
+
+        <div className="m-field">
+          <label>Motif de l'ajustement</label>
+          <select value={motif} onChange={(e) => setMotif(e.target.value)}>
+            {MOTIFS.map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </div>
+
+        <button type="submit" className="btn-primary" style={{ width: '100%', justifyContent: 'center' }} disabled={loading}>
+          <Icon.Wrench />
+          {loading ? 'Enregistrement...' : "Valider l'ajustement"}
+        </button>
+      </form>
+    </div>
   )
 }

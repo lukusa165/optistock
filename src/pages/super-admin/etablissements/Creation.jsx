@@ -44,12 +44,10 @@ export default function Creation() {
     const dateFin = form.dateFin || dateFinDefaut.toISOString().slice(0, 10)
 
     // 1. Créer le compte Auth du gérant
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-      email: emailGerant,
-      password: motDePasse,
-      email_confirm: true,
-    })
-
+   const { data: authData, error: authError } = await supabase.auth.signUp({
+  email: emailGerant,
+  password: motDePasse,
+})
     if (authError) {
       setError(`Erreur création du compte : ${authError.message}`)
       setLoading(false)

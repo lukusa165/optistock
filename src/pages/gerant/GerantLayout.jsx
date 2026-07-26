@@ -10,69 +10,101 @@ export default function GerantLayout() {
   const [gerant, setGerant] = useState(null)
   const [etablissement, setEtablissement] = useState(null)
   const [alertesCount, setAlertesCount] = useState(0)
+  const [chargementTermine, setChargementTermine] = useState(false)
+  const [erreurProfil, setErreurProfil] = useState('')
 
   useEffect(() => {
     chargerProfil()
   }, [])
 
- const chargerProfil = async () => {
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) return
-
-  const { data: profil } = await supabase
-    .from('profiles')
-    .select('*, etablissements(*)')
-    .eq('id', session.user.id)
-    .single()
-
-  if (profil) {
-    setGerant(profil)
-    setEtablissement(profil.etablissements)
-
-    // Tracer la connexion
-    await logAction({
-      etablissement_id: profil.etablissement_id,
-      user_id: profil.id,
-      user_nom: profil.nom_complet,
-      type: 'connexion',
-      description: `Connexion — ${profil.nom_complet} (${profil.role})`,
-    })
-
-    // Alertes non lues
-    const { count } = await supabase
-      .from('alertes')
-      .select('*', { count: 'exact', head: true })
-      .eq('etablissement_id', profil.etablissement_id)
-      .eq('lu', false)
-    setAlertesCount(count || 0)
-
-    // Vérifier expiration abonnement
-    if (profil.etablissements?.date_fin_abonnement) {
-      const jours = Math.ceil((new Date(profil.etablissements.date_fin_abonnement) - new Date()) / (1000 * 60 * 60 * 24))
-      if (jours <= 7 && jours >= 0) {
-        await supabase.from('alertes').upsert({
-          etablissement_id: profil.etablissement_id,
-          type: 'abonnement',
-          message: `Votre abonnement expire dans ${jours} jour(s) (${new Date(profil.etablissements.date_fin_abonnement).toLocaleDateString('fr-FR')}).`,
-        }, { onConflict: 'etablissement_id,type,message', ignoreDuplicates: true })
+  const chargerProfil = async () => {
+    setErreurProfil('')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        setErreurProfil("Session expirée. Merci de vous reconnecter.")
+        return
       }
+
+      const { data: profil, error: erreurRequete } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .single()
+
+      if (erreurRequete) {
+        console.error('Erreur chargement profil gérant:', erreurRequete)
+        setErreurProfil("Impossible de charger votre profil : " + erreurRequete.message)
+        return
+      }
+
+      if (!profil) {
+        setErreurProfil("Aucun profil trouvé pour ce compte.")
+        return
+      }
+
+      let etab = null
+      if (profil.etablissement_id) {
+        const { data: etabData } = await supabase
+          .from('etablissements')
+          .select('*')
+          .eq('id', profil.etablissement_id)
+          .single()
+        etab = etabData
+      }
+
+      setGerant(profil)
+      setEtablissement(etab)
+
+      // Tracer la connexion
+      await logAction({
+        etablissement_id: profil.etablissement_id,
+        user_id: profil.id,
+        user_nom: profil.nom_complet,
+        type: 'connexion',
+        description: `Connexion — ${profil.nom_complet} (${profil.role})`,
+      })
+
+      // Alertes non lues
+      const { count } = await supabase
+        .from('alertes')
+        .select('*', { count: 'exact', head: true })
+        .eq('etablissement_id', profil.etablissement_id)
+        .eq('lu', false)
+      setAlertesCount(count || 0)
+
+      // Vérifier expiration abonnement
+      if (etab?.date_fin_abonnement) {
+        const jours = Math.ceil((new Date(etab.date_fin_abonnement) - new Date()) / (1000 * 60 * 60 * 24))
+        if (jours <= 7 && jours >= 0) {
+          await supabase.from('alertes').upsert({
+            etablissement_id: profil.etablissement_id,
+            type: 'abonnement',
+            message: `Votre abonnement expire dans ${jours} jour(s) (${new Date(etab.date_fin_abonnement).toLocaleDateString('fr-FR')}).`,
+          }, { onConflict: 'etablissement_id,type,message', ignoreDuplicates: true })
+        }
+      }
+    } catch (e) {
+      console.error('Erreur inattendue chargerProfil:', e)
+      setErreurProfil("Erreur inattendue : " + e.message)
+    } finally {
+      setChargementTermine(true)
     }
   }
-}
 
-const handleLogout = async () => {
-  if (gerant) {
-    await logAction({
-      etablissement_id: gerant.etablissement_id,
-      user_id: gerant.id,
-      user_nom: gerant.nom_complet,
-      type: 'deconnexion',
-      description: `Déconnexion — ${gerant.nom_complet}`,
-    })
+  const handleLogout = async () => {
+    if (gerant) {
+      await logAction({
+        etablissement_id: gerant.etablissement_id,
+        user_id: gerant.id,
+        user_nom: gerant.nom_complet,
+        type: 'deconnexion',
+        description: `Déconnexion — ${gerant.nom_complet}`,
+      })
+    }
+    await supabase.auth.signOut()
+    navigate('/')
   }
-  await supabase.auth.signOut()
-  navigate('/')
-}
 
   const navItems = [
     { to: '/gerant/dashboard', label: 'Tableau de bord', icon: 'Grid' },
@@ -104,7 +136,6 @@ const handleLogout = async () => {
         body { background: var(--bg); margin: 0; }
         .gr { display: flex; height: 100vh; overflow: hidden; background: var(--bg); font-family: 'Inter', sans-serif; color: var(--text); }
 
-        /* SIDEBAR */
         .sidebar { width: 220px; flex-shrink: 0; background: var(--bg-2); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; }
         .sidebar-top { padding: 14px 12px 0; flex: 1; }
         .gr-brand { display: flex; align-items: center; gap: 8px; padding: 4px 6px 14px; }
@@ -133,7 +164,6 @@ const handleLogout = async () => {
         .logout-btn:hover { color: var(--danger); background: rgba(220,38,38,.06); }
         .logout-btn svg { width: 14px; height: 14px; }
 
-        /* MAIN */
         .main { flex: 1; overflow-y: auto; padding: 16px 20px; }
         .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
         .topbar-left h1 { font-family: 'Space Grotesk', sans-serif; font-size: 17px; font-weight: 700; color: var(--text); }
@@ -147,7 +177,6 @@ const handleLogout = async () => {
         .icon-btn:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-pale); }
         .notif-dot { position: absolute; top: 6px; right: 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--danger); border: 1.5px solid var(--panel); }
 
-        /* STATS */
         .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
         .stat-card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px; box-shadow: var(--shadow); }
         .stat-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 6px; }
@@ -157,12 +186,10 @@ const handleLogout = async () => {
         .stat-value { font-family: 'Space Grotesk', sans-serif; font-size: 22px; font-weight: 700; color: var(--text); line-height: 1; }
         .stat-delta { font-size: 10.5px; color: var(--success); margin-top: 3px; font-weight: 500; }
 
-        /* PANELS */
         .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 12px; box-shadow: var(--shadow); }
         .panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
         .panel-head h2 { font-family: 'Space Grotesk', sans-serif; font-size: 13.5px; font-weight: 700; color: var(--text); }
 
-        /* BOUTONS */
         .btn-primary { display: flex; align-items: center; gap: 6px; background: var(--accent); color: #fff; border: none; padding: 7px 13px; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; transition: filter .15s; box-shadow: 0 2px 5px rgba(26,122,80,0.2); }
         .btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
         .btn-primary:disabled { opacity: .6; cursor: not-allowed; }
@@ -171,13 +198,11 @@ const handleLogout = async () => {
         .btn-ghost:hover:not(:disabled) { color: var(--text); border-color: var(--text); }
         .btn-danger { background: var(--danger); color: #fff; border: none; padding: 7px 13px; border-radius: 7px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; }
 
-        /* SOUS-ONGLETS */
         .sub-tabs { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
         .sub-tab { padding: 5px 12px; border-radius: 20px; font-size: 11.5px; font-weight: 600; color: var(--muted); background: var(--panel); border: 1px solid var(--border); text-decoration: none; transition: all .15s; font-family: 'Inter', sans-serif; }
         .sub-tab:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-pale); }
         .sub-tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
-        /* TABLE */
         table { width: 100%; border-collapse: collapse; }
         thead th { text-align: left; font-size: 9.5px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 600; padding: 0 10px 10px; font-family: 'JetBrains Mono', monospace; }
         tbody tr { border-top: 1px solid var(--border); transition: background .1s; }
@@ -193,14 +218,12 @@ const handleLogout = async () => {
         .row-actions button:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-pale); }
         .row-actions .danger:hover { color: var(--danger); border-color: var(--danger); background: rgba(220,38,38,.06); }
 
-        /* EMPTY */
         .empty-state { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 36px 16px; }
         .empty-icon { width: 44px; height: 44px; border-radius: 11px; background: var(--accent-pale); display: flex; align-items: center; justify-content: center; margin-bottom: 10px; }
         .empty-icon svg { width: 20px; height: 20px; color: var(--accent); }
         .empty-state h3 { color: var(--text); font-family: 'Space Grotesk', sans-serif; font-size: 13.5px; font-weight: 600; margin-bottom: 4px; }
         .empty-state p { font-size: 11.5px; color: var(--muted); max-width: 240px; margin-bottom: 12px; line-height: 1.5; }
 
-        /* MODAL */
         .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.2); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 14px; }
         .modal { width: 100%; max-width: 480px; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px; box-shadow: 0 20px 40px rgba(0,0,0,0.12); max-height: 90vh; overflow-y: auto; }
         .modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
@@ -218,16 +241,13 @@ const handleLogout = async () => {
         .m-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
         .modal-actions { display: flex; gap: 8px; margin-top: 14px; }
 
-        /* ALERTES */
         .alert-success { background: #F0FDF4; border: 1px solid #BBF7D0; color: #15803D; padding: 9px 12px; border-radius: 8px; font-size: 11.5px; margin-bottom: 12px; }
         .alert-error { background: #FEF2F2; border: 1px solid #FECACA; color: #DC2626; padding: 9px 12px; border-radius: 8px; font-size: 11.5px; margin-bottom: 12px; }
         .alert-warning { background: #FFFBEB; border: 1px solid #FDE68A; color: #92400E; padding: 9px 12px; border-radius: 8px; font-size: 11.5px; margin-bottom: 12px; }
 
-        /* EMPLACEMENT */
         .emplacement-box { background: var(--accent-pale); border: 1px solid rgba(26,122,80,.2); border-radius: 8px; padding: 12px; margin-bottom: 11px; }
         .emplacement-title { font-size: 9.5px; color: var(--accent); font-family: 'JetBrains Mono', monospace; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; }
 
-        /* CREDENTIALS */
         .credentials-box { background: #F0FDF4; border: 1px solid #BBF7D0; border-radius: 10px; padding: 12px; margin-bottom: 14px; }
         .cred-title { display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: #15803D; margin-bottom: 4px; }
         .cred-sub { font-size: 11px; color: #166534; margin-bottom: 10px; line-height: 1.5; }
@@ -237,13 +257,11 @@ const handleLogout = async () => {
         .cred-copy { padding: 3px 9px; border-radius: 6px; border: 1px solid #BBF7D0; background: transparent; color: #15803D; font-size: 11px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; }
         .cred-copy:hover { background: #DCFCE7; }
 
-        /* PLAN LIMIT */
         .plan-limit { display: flex; align-items: center; justify-content: space-between; background: var(--accent-pale); border: 1px solid rgba(26,122,80,.2); border-radius: 8px; padding: 10px 13px; margin-bottom: 12px; }
         .plan-limit-text { font-size: 12px; color: var(--text); }
         .plan-limit-bar { width: 100px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-left: 10px; }
         .plan-limit-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width .3s; }
 
-        /* GRAPHIQUES PLACEHOLDER */
         .chart-placeholder { background: var(--panel-2); border: 1px dashed var(--border); border-radius: 8px; height: 160px; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 12px; }
 
         @media (max-width: 1100px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
@@ -322,7 +340,11 @@ const handleLogout = async () => {
           </div>
         </div>
 
-        <Outlet context={{ gerant, etablissement, typeEtablissement }} />
+        {erreurProfil && (
+          <div className="alert-error">⚠️ {erreurProfil}</div>
+        )}
+
+        <Outlet context={{ gerant, etablissement, typeEtablissement, chargementTermine }} />
       </main>
     </div>
   )

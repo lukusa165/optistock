@@ -2,10 +2,7 @@ import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { supabase } from './lib/supabaseClient.js'
 
-// Auth
 import Login from './pages/login/Login.jsx'
-
-// Super Admin
 import SuperAdminLayout from './pages/super-admin/SuperAdminLayout.jsx'
 import EtablissementsLayout from './pages/super-admin/etablissements/EtablissementsLayout.jsx'
 import Creation from './pages/super-admin/etablissements/Creation.jsx'
@@ -24,8 +21,6 @@ import Assistance from './pages/super-admin/parametres/Assistance.jsx'
 import Journaux from './pages/super-admin/parametres/Journaux.jsx'
 import Sauvegarde from './pages/super-admin/parametres/Sauvegarde.jsx'
 import Maintenance from './pages/super-admin/parametres/Maintenance.jsx'
-
-// Gérant
 import GerantLayout from './pages/gerant/GerantLayout.jsx'
 import Dashboard from './pages/gerant/dashboard/Dashboard.jsx'
 import UtilisateursLayout from './pages/gerant/utilisateurs/UtilisateursLayout.jsx'
@@ -58,43 +53,152 @@ import BeneficesStats from './pages/gerant/statistiques/BeneficesStats.jsx'
 import Alertes from './pages/gerant/alertes/Alertes.jsx'
 import HistoriqueGerant from './pages/gerant/historique/HistoriqueGerant.jsx'
 import ParametresGerant from './pages/gerant/parametres/ParametresGerant.jsx'
-
-// Vendeur
 import VendeurLayout from './pages/vendeur/VendeurLayout.jsx'
 import Caisse from './pages/vendeur/Caisse.jsx'
 import RechercheArticle from './pages/vendeur/RechercheArticle.jsx'
 import MesVentes from './pages/vendeur/MesVentes.jsx'
 
+function BanniereHorsLigne() {
+  const [horsLigne, setHorsLigne] = useState(!navigator.onLine)
+  useEffect(() => {
+    const on = () => setHorsLigne(false)
+    const off = () => setHorsLigne(true)
+    window.addEventListener('online', on)
+    window.addEventListener('offline', off)
+    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off) }
+  }, [])
+  if (!horsLigne) return null
+  return (
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 9999, background: '#DC2626', color: '#fff', textAlign: 'center', padding: '10px', fontSize: 13, fontFamily: 'Inter, sans-serif', fontWeight: 600 }}>
+      ⚠️ Connexion Internet perdue — Reconnectez-vous pour continuer
+    </div>
+  )
+}
+
 function RouteProtegee({ role, children }) {
   const [statut, setStatut] = useState('chargement')
+  const [erreur, setErreur] = useState('')
+  const [motifRefus, setMotifRefus] = useState('')
 
   useEffect(() => {
     const verifier = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return setStatut('refuse')
-      const { data: profile } = await supabase.from('profiles').select('role').eq('id', session.user.id).single()
-      if (Array.isArray(role) ? role.includes(profile?.role) : profile?.role === role) setStatut('autorise')
-      else setStatut('refuse')
+      try {
+        if (!navigator.onLine) { setErreur('Pas de connexion Internet'); setStatut('erreur'); return }
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session) { setStatut('refuse'); return }
+
+        // Requête 1 : le profil seul, sans embed
+        const { data: profile, error } = await supabase
+          .from('profiles')
+          .select('role, actif, etablissement_id')
+          .eq('id', session.user.id)
+          .single()
+        if (error) throw error
+
+        // Requête 2 : l'établissement, séparément (seulement si applicable)
+        let etab = null
+        if (profile?.role !== 'super_admin' && profile?.etablissement_id) {
+          const { data: etabData } = await supabase
+            .from('etablissements')
+            .select('statut, date_fin_abonnement')
+            .eq('id', profile.etablissement_id)
+            .single()
+          etab = etabData
+        }
+
+        // Mode maintenance global : bloque tout le monde sauf le super admin
+        if (profile?.role !== 'super_admin') {
+          const { data: maintenance } = await supabase
+            .from('parametres_globaux')
+            .select('valeur')
+            .eq('cle', 'maintenance')
+            .single()
+          if (maintenance?.valeur === 'true') {
+            setMotifRefus("L'application est actuellement en maintenance. Merci de réessayer plus tard.")
+            setStatut('refuse')
+            return
+          }
+        }
+
+        // Blocage individuel (gérant a bloqué CE vendeur précisément)
+        if (profile?.actif === false) {
+          setMotifRefus('Votre compte a été suspendu.')
+          setStatut('refuse')
+          return
+        }
+
+        // Blocage en cascade : le super admin a désactivé l'établissement,
+        // ou l'abonnement a expiré → gérant ET tous ses vendeurs sont bloqués
+        if (profile?.role !== 'super_admin') {
+          const abonnementExpire = etab?.date_fin_abonnement && new Date(etab.date_fin_abonnement) < new Date()
+
+          if (!etab || etab.statut !== 'Actif' || abonnementExpire) {
+            setMotifRefus(
+              abonnementExpire
+                ? "L'abonnement de votre établissement a expiré. Contactez votre gérant ou l'administrateur."
+                : "Votre établissement a été désactivé. Contactez l'administrateur."
+            )
+            setStatut('refuse')
+            return
+          }
+        }
+
+        if (Array.isArray(role) ? role.includes(profile?.role) : profile?.role === role) setStatut('autorise')
+        else setStatut('refuse')
+      } catch (e) {
+        if (e.message?.includes('fetch') || e.message?.includes('network')) {
+          setErreur('Connexion au serveur impossible. Vérifiez votre Internet.')
+          setStatut('erreur')
+        } else {
+          setStatut('refuse')
+        }
+      }
     }
     verifier()
   }, [role])
 
   if (statut === 'chargement') return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F0F4F2', color: '#1A7A50', fontFamily: 'Inter, sans-serif', fontSize: 13 }}>
-      Chargement...
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F0F4F2', flexDirection: 'column', gap: 12, fontFamily: 'Inter, sans-serif' }}>
+      <div style={{ width: 32, height: 32, border: '3px solid #1A7A50', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <span style={{ color: '#1A7A50', fontSize: 13 }}>Chargement...</span>
     </div>
   )
-  if (statut === 'refuse') return <Navigate to="/" replace />
+  if (statut === 'erreur') return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F0F4F2', flexDirection: 'column', gap: 14, fontFamily: 'Inter, sans-serif', textAlign: 'center', padding: 20 }}>
+      <div style={{ fontSize: 40 }}>📡</div>
+      <div style={{ fontSize: 16, fontWeight: 700, color: '#0D1F16' }}>Connexion impossible</div>
+      <div style={{ fontSize: 13, color: '#6B7A72', maxWidth: 300 }}>{erreur}</div>
+      <button onClick={() => window.location.reload()} style={{ background: '#1A7A50', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 9, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+        Réessayer
+      </button>
+    </div>
+  )
+  if (statut === 'refuse') {
+    if (motifRefus) {
+      return (
+        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F0F4F2', flexDirection: 'column', gap: 14, fontFamily: 'Inter, sans-serif', textAlign: 'center', padding: 20 }}>
+          <div style={{ fontSize: 40 }}>🔒</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: '#0D1F16' }}>Accès suspendu</div>
+          <div style={{ fontSize: 13, color: '#6B7A72', maxWidth: 320 }}>{motifRefus}</div>
+          <button onClick={async () => { await supabase.auth.signOut(); window.location.href = '/' }} style={{ background: '#1A7A50', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 9, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+            Retour à la connexion
+          </button>
+        </div>
+      )
+    }
+    return <Navigate to="/" replace />
+  }
   return children
 }
 
 function App() {
   return (
     <BrowserRouter>
+      <BanniereHorsLigne />
       <Routes>
         <Route path="/" element={<Login />} />
 
-        {/* ===== SUPER ADMIN ===== */}
         <Route path="/super-admin" element={<RouteProtegee role="super_admin"><SuperAdminLayout /></RouteProtegee>}>
           <Route index element={<Navigate to="etablissements" replace />} />
           <Route path="etablissements" element={<EtablissementsLayout />}>
@@ -122,17 +226,14 @@ function App() {
           </Route>
         </Route>
 
-        {/* ===== GÉRANT ===== */}
         <Route path="/gerant" element={<RouteProtegee role={['gerant', 'super_admin']}><GerantLayout /></RouteProtegee>}>
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
-
           <Route path="utilisateurs" element={<UtilisateursLayout />}>
             <Route index element={<Navigate to="liste" replace />} />
             <Route path="liste" element={<ListeVendeurs />} />
             <Route path="creer" element={<CreerVendeur />} />
           </Route>
-
           <Route path="articles" element={<ArticlesLayout />}>
             <Route index element={<Navigate to="liste" replace />} />
             <Route path="liste" element={<ListeArticles />} />
@@ -140,20 +241,17 @@ function App() {
             <Route path="modifier" element={<ModifierArticle />} />
             <Route path="categories" element={<Categories />} />
           </Route>
-
           <Route path="stock" element={<StockLayout />}>
             <Route index element={<Navigate to="entree" replace />} />
             <Route path="entree" element={<EntreeStock />} />
             <Route path="inventaire" element={<Inventaire />} />
             <Route path="ajustements" element={<Ajustements />} />
           </Route>
-
           <Route path="ventes" element={<VentesLayout />}>
             <Route index element={<Navigate to="nouvelle" replace />} />
             <Route path="nouvelle" element={<NouvelleVente />} />
             <Route path="historique" element={<HistoriqueVentes />} />
           </Route>
-
           <Route path="benefices" element={<BeneficesLayout />}>
             <Route index element={<Navigate to="journalier" replace />} />
             <Route path="journalier" element={<Journalier />} />
@@ -161,32 +259,30 @@ function App() {
             <Route path="mensuel" element={<Mensuel />} />
             <Route path="annuel" element={<Annuel />} />
           </Route>
-
           <Route path="fournisseurs" element={<FournisseursLayout />}>
             <Route index element={<Navigate to="liste" replace />} />
             <Route path="liste" element={<ListeFournisseurs />} />
             <Route path="ajouter" element={<AjouterFournisseur />} />
           </Route>
-
           <Route path="statistiques" element={<StatistiquesLayout />}>
             <Route index element={<Navigate to="vendeurs" replace />} />
             <Route path="vendeurs" element={<StatsVendeurs />} />
             <Route path="ventes" element={<VentesStats />} />
             <Route path="benefices" element={<BeneficesStats />} />
           </Route>
-
           <Route path="alertes" element={<Alertes />} />
           <Route path="historique" element={<HistoriqueGerant />} />
           <Route path="parametres" element={<ParametresGerant />} />
         </Route>
 
-        {/* ===== VENDEUR ===== */}
         <Route path="/vendeur" element={<RouteProtegee role={['vendeur', 'gerant', 'super_admin']}><VendeurLayout /></RouteProtegee>}>
           <Route index element={<Navigate to="caisse" replace />} />
           <Route path="caisse" element={<Caisse />} />
           <Route path="articles" element={<RechercheArticle />} />
           <Route path="historique" element={<MesVentes />} />
         </Route>
+
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   )

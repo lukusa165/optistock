@@ -1,24 +1,16 @@
 import { NavLink, Outlet, useOutletContext } from 'react-router-dom'
 
-const tabs = [
-  { to: 'liste', label: 'Liste des articles' },
-  { to: 'ajouter', label: 'Ajouter' },
-  { to: 'modifier', label: 'Modifier' },
-  { to: 'categories', label: 'Catégories' },
-]
-
 export default function ArticlesLayout() {
-  const ctx = useOutletContext()
+  const context = useOutletContext()
+
   return (
     <>
       <div className="sub-tabs">
-        {tabs.map((t) => (
-          <NavLink key={t.to} to={t.to} className={({ isActive }) => `sub-tab ${isActive ? 'active' : ''}`}>
-            {t.label}
-          </NavLink>
-        ))}
+        <NavLink to="liste" className={({ isActive }) => `sub-tab ${isActive ? 'active' : ''}`}>Liste des articles</NavLink>
+        <NavLink to="ajouter" className={({ isActive }) => `sub-tab ${isActive ? 'active' : ''}`}>Ajouter un article</NavLink>
+        <NavLink to="categories" className={({ isActive }) => `sub-tab ${isActive ? 'active' : ''}`}>Catégories</NavLink>
       </div>
-      <Outlet context={ctx} />
+      <Outlet context={context} />
     </>
   )
 }

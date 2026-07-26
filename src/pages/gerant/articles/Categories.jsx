@@ -1,80 +1,71 @@
 import { useState, useEffect } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import { Icon } from '../../../components/Icons.jsx'
 import { supabase } from '../../../lib/supabaseClient.js'
+import { Icon } from '../../../components/Icons.jsx'
 
 export default function Categories() {
-  const { etablissement } = useOutletContext()
-  const [categories, setCategories] = useState([])
-  const [nom, setNom] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [success, setSuccess] = useState('')
+  const { etablissement, chargementTermine } = useOutletContext()
+  const [articles, setArticles] = useState([])
+  const [loading, setLoading] = useState(true)
 
-  useEffect(() => { if (etablissement) charger() }, [etablissement])
+  useEffect(() => {
+    if (chargementTermine && etablissement) charger()
+  }, [chargementTermine, etablissement])
 
   const charger = async () => {
-    const { data } = await supabase.from('categories').select('*').eq('etablissement_id', etablissement.id).order('nom')
-    setCategories(data || [])
-  }
-
-  const ajouter = async (e) => {
-    e.preventDefault()
-    if (!nom.trim()) return
     setLoading(true)
-    await supabase.from('categories').insert({ etablissement_id: etablissement.id, nom: nom.trim() })
-    setNom('')
-    setSuccess('Catégorie ajoutée.')
-    charger()
+    const { data } = await supabase
+      .from('articles')
+      .select('categorie, quantite, prix_vente')
+      .eq('etablissement_id', etablissement.id)
+    setArticles(data || [])
     setLoading(false)
-    setTimeout(() => setSuccess(''), 3000)
   }
 
-  const supprimer = async (id) => {
-    await supabase.from('categories').delete().eq('id', id)
-    setCategories(c => c.filter(x => x.id !== id))
+  const f = (n) => parseInt(n).toLocaleString('fr-FR') + ' F'
+
+  const parCategorie = {}
+  articles.forEach((a) => {
+    const cat = a.categorie?.trim() || 'Sans catégorie'
+    if (!parCategorie[cat]) parCategorie[cat] = { nom: cat, nbArticles: 0, stockTotal: 0, valeurStock: 0 }
+    parCategorie[cat].nbArticles++
+    parCategorie[cat].stockTotal += a.quantite
+    parCategorie[cat].valeurStock += a.quantite * a.prix_vente
+  })
+  const categories = Object.values(parCategorie).sort((a, b) => b.nbArticles - a.nbArticles)
+
+  if (loading) {
+    return <div className="panel"><div style={{ textAlign: 'center', padding: 30, color: 'var(--muted)' }}>Chargement...</div></div>
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-      <div className="panel">
-        <div className="panel-head"><h2>Catégories ({categories.length})</h2></div>
-        {categories.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-icon"><Icon.FilePlus /></div>
-            <h3>Aucune catégorie</h3>
-            <p>Crée ta première catégorie ci-contre.</p>
-          </div>
-        ) : (
-          <table>
-            <thead><tr><th>Nom</th><th style={{ textAlign: 'right' }}>Action</th></tr></thead>
-            <tbody>
-              {categories.map((c) => (
-                <tr key={c.id}>
-                  <td className="name-cell">{c.nom}</td>
-                  <td>
-                    <div className="row-actions">
-                      <button className="danger" onClick={() => supprimer(c.id)}><Icon.Trash /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+    <div className="panel">
+      <div className="panel-head"><h2>Catégories ({categories.length})</h2></div>
 
-      <div className="panel">
-        <div className="panel-head"><h2>Nouvelle catégorie</h2></div>
-        {success && <div className="alert-success">✓ {success}</div>}
-        <form onSubmit={ajouter}>
-          <div className="m-field">
-            <label>Nom de la catégorie</label>
-            <input value={nom} onChange={(e) => setNom(e.target.value)} placeholder="Ex : Médicaments, Boissons..." required />
-          </div>
-          <button type="submit" className="btn-primary" style={{ width: '100%', justifyContent: 'center' }} disabled={loading}>
-            <Icon.Plus />Ajouter
-          </button>
-        </form>
+      {categories.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-icon"><Icon.Database /></div>
+          <h3>Aucune catégorie</h3>
+          <p>Les catégories apparaissent automatiquement quand vous en renseignez une sur vos articles.</p>
+        </div>
+      ) : (
+        <table>
+          <thead><tr><th>Catégorie</th><th>Articles</th><th>Stock total</th><th>Valeur du stock</th></tr></thead>
+          <tbody>
+            {categories.map((c) => (
+              <tr key={c.nom}>
+                <td className="name-cell">{c.nom}</td>
+                <td>{c.nbArticles}</td>
+                <td>{c.stockTotal}</td>
+                <td style={{ fontWeight: 700, color: 'var(--accent)' }}>{f(c.valeurStock)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <div className="hint" style={{ marginTop: 14 }}>
+        Astuce : pour créer une nouvelle catégorie, saisissez simplement son nom dans le champ "Catégorie" en ajoutant ou modifiant un article.
       </div>
     </div>
   )

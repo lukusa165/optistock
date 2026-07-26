@@ -3,25 +3,34 @@ import { useOutletContext } from 'react-router-dom'
 import { Icon } from '../../../components/Icons.jsx'
 import { supabase, telephoneVersEmail, genererNumeroVendeur, genererMotDePasse } from '../../../lib/supabaseClient.js'
 
-const PLAN_LIMITES = {
-  'Essai gratuit': 1, 'Essentiel': 2, 'Pro': 6, 'Entreprise': Infinity
-}
 const NUMERO_SUPER_ADMIN = '0831511015'
 
 export default function CreerVendeur() {
   const { etablissement, gerant } = useOutletContext()
   const [nbVendeurs, setNbVendeurs] = useState(0)
+  const [limite, setLimite] = useState(1)
   const [form, setForm] = useState({ nomVendeur: '' })
   const [resultat, setResultat] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [copied, setCopied] = useState('')
 
-  const limite = PLAN_LIMITES[etablissement?.plan] || 1
-
   useEffect(() => {
-    if (etablissement) compterVendeurs()
+    if (etablissement) {
+      compterVendeurs()
+      chargerLimitePlan()
+    }
   }, [etablissement])
+
+  const chargerLimitePlan = async () => {
+    const { data } = await supabase
+      .from('plans')
+      .select('limite_vendeurs')
+      .eq('nom', etablissement.plan)
+      .single()
+    // limite_vendeurs null en base = illimité
+    setLimite(data ? (data.limite_vendeurs ?? Infinity) : 1)
+  }
 
   const compterVendeurs = async () => {
     const { count } = await supabase
@@ -53,34 +62,23 @@ export default function CreerVendeur() {
     const motDePasse = genererMotDePasse()
     const emailVendeur = telephoneVersEmail(numeroVendeur)
 
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-      email: emailVendeur,
-      password: motDePasse,
-      email_confirm: true,
+    const { data, error: fnError } = await supabase.functions.invoke('creer-utilisateur', {
+      body: {
+        email: emailVendeur,
+        password: motDePasse,
+        role: 'vendeur',
+        nom_complet: form.nomVendeur,
+        telephone: numeroVendeur,
+      },
     })
 
-    if (authError) {
-      setError(`Erreur : ${authError.message}`)
+    if (fnError || data?.error) {
+      setError(`Erreur : ${data?.error || fnError.message}`)
       setLoading(false)
       return
     }
 
-    const { error: profileError } = await supabase.from('profiles').insert({
-      id: authData.user.id,
-      role: 'vendeur',
-      nom_complet: form.nomVendeur,
-      telephone: numeroVendeur,
-      etablissement_id: etablissement.id,
-      actif: true,
-    })
-
-    if (profileError) {
-      setError(`Erreur profil : ${profileError.message}`)
-      setLoading(false)
-      return
-    }
-
-    setNbVendeurs(n => n + 1)
+    setNbVendeurs((n) => n + 1)
     setResultat({ nom: form.nomVendeur, numero: numeroVendeur, motDePasse })
     setForm({ nomVendeur: '' })
     setLoading(false)

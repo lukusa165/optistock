@@ -1,129 +1,104 @@
 import { useState, useEffect } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { supabase } from '../../../lib/supabaseClient.js'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { Icon } from '../../../components/Icons.jsx'
+
+const MOIS = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
 
 export default function Mensuel() {
-  const { etablissement } = useOutletContext()
-  const now = new Date()
-  const [mois, setMois] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`)
-  const [data, setData] = useState([])
-  const [comparaison, setComparaison] = useState(null)
+  const { etablissement, chargementTermine } = useOutletContext()
+  const [offset, setOffset] = useState(0)
+  const [ventes, setVentes] = useState([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => { if (etablissement) charger() }, [etablissement, mois])
+  const maintenant = new Date()
+  const mois = new Date(maintenant.getFullYear(), maintenant.getMonth() + offset, 1)
+  const debutMois = new Date(mois.getFullYear(), mois.getMonth(), 1)
+  const finMois = new Date(mois.getFullYear(), mois.getMonth() + 1, 0, 23, 59, 59, 999)
+  const nbJours = finMois.getDate()
+
+  useEffect(() => {
+    if (chargementTermine && etablissement) charger()
+  }, [chargementTermine, etablissement, offset])
 
   const charger = async () => {
     setLoading(true)
-    const [year, month] = mois.split('-')
-    const debut = `${year}-${month}-01`
-    const fin = new Date(parseInt(year), parseInt(month), 0).toISOString().slice(0, 10)
-
-    // Mois en cours
-    const { data: ventes } = await supabase
+    const { data } = await supabase
       .from('ventes')
       .select('montant_total, benefice_total, created_at')
       .eq('etablissement_id', etablissement.id)
-      .gte('created_at', `${debut}T00:00:00`)
-      .lte('created_at', `${fin}T23:59:59`)
+      .gte('created_at', debutMois.toISOString())
+      .lte('created_at', finMois.toISOString())
       .order('created_at')
-
-    // Grouper par jour
-    const parJour = {}
-    ventes?.forEach(v => {
-      const jour = v.created_at.slice(8, 10)
-      const label = `${jour}/${month}`
-      if (!parJour[label]) parJour[label] = { jour: label, ca: 0, benefice: 0, ventes: 0 }
-      parJour[label].ca += v.montant_total
-      parJour[label].benefice += v.benefice_total
-      parJour[label].ventes++
-    })
-    setData(Object.values(parJour))
-
-    // Mois précédent pour comparaison
-    const prevMonth = new Date(parseInt(year), parseInt(month) - 2, 1)
-    const prevDebut = prevMonth.toISOString().slice(0, 7) + '-01'
-    const prevFin = new Date(prevMonth.getFullYear(), prevMonth.getMonth() + 1, 0).toISOString().slice(0, 10)
-
-    const { data: ventesPrev } = await supabase
-      .from('ventes')
-      .select('montant_total, benefice_total')
-      .eq('etablissement_id', etablissement.id)
-      .gte('created_at', `${prevDebut}T00:00:00`)
-      .lte('created_at', `${prevFin}T23:59:59`)
-
-    const prevCA = ventesPrev?.reduce((s, v) => s + v.montant_total, 0) || 0
-    const prevBen = ventesPrev?.reduce((s, v) => s + v.benefice_total, 0) || 0
-    const currCA = ventes?.reduce((s, v) => s + v.montant_total, 0) || 0
-    const currBen = ventes?.reduce((s, v) => s + v.benefice_total, 0) || 0
-
-    setComparaison({
-      currCA, currBen, prevCA, prevBen,
-      diffCA: prevCA > 0 ? ((currCA - prevCA) / prevCA * 100).toFixed(1) : null,
-      diffBen: prevBen > 0 ? ((currBen - prevBen) / prevBen * 100).toFixed(1) : null,
-    })
-
+    setVentes(data || [])
     setLoading(false)
   }
 
-  const f = (n) => parseInt(n || 0).toLocaleString('fr-FR') + ' F'
+  const f = (n) => parseInt(n).toLocaleString('fr-FR') + ' F'
+  const totalCA = ventes.reduce((s, v) => s + v.montant_total, 0)
+  const totalBenefice = ventes.reduce((s, v) => s + v.benefice_total, 0)
+
+  // Regroupement par semaine du mois
+  const parSemaine = {}
+  ventes.forEach((v) => {
+    const jour = new Date(v.created_at).getDate()
+    const numSemaine = Math.ceil(jour / 7)
+    const cle = `Sem. ${numSemaine}`
+    if (!parSemaine[cle]) parSemaine[cle] = { semaine: cle, ca: 0, benefice: 0 }
+    parSemaine[cle].ca += v.montant_total
+    parSemaine[cle].benefice += v.benefice_total
+  })
+  const nbSemaines = Math.ceil(nbJours / 7)
+  const chartData = Array.from({ length: nbSemaines }, (_, i) => {
+    const cle = `Sem. ${i + 1}`
+    return parSemaine[cle] || { semaine: cle, ca: 0, benefice: 0 }
+  })
 
   return (
     <>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
+        {[
+          { label: "Chiffre d'affaires", value: f(totalCA), color: 'var(--accent)' },
+          { label: 'Bénéfice net', value: f(totalBenefice), color: '#16A34A' },
+          { label: 'Nombre de ventes', value: ventes.length, color: 'var(--text)' },
+        ].map((s) => (
+          <div key={s.label} className="panel" style={{ marginBottom: 0 }}>
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>{s.label}</div>
+            <div style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</div>
+          </div>
+        ))}
+      </div>
+
       <div className="panel">
         <div className="panel-head">
-          <h2>Bénéfices mensuels</h2>
-          <input
-            type="month"
-            value={mois}
-            onChange={(e) => setMois(e.target.value)}
-            style={{ border: '1.5px solid var(--border)', borderRadius: 8, padding: '6px 10px', fontSize: 12, color: 'var(--text)', background: 'var(--panel-2)', outline: 'none', fontFamily: 'Inter, sans-serif' }}
-          />
-        </div>
-
-        {/* Comparaison avec mois précédent */}
-        {comparaison && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 16 }}>
-            {[
-              { label: 'CA ce mois', value: f(comparaison.currCA), diff: comparaison.diffCA },
-              { label: 'CA mois précédent', value: f(comparaison.prevCA), diff: null, muted: true },
-              { label: 'Bénéfice ce mois', value: f(comparaison.currBen), diff: comparaison.diffBen },
-              { label: 'Bénéfice mois préc.', value: f(comparaison.prevBen), diff: null, muted: true },
-            ].map((s, i) => (
-              <div key={i} style={{ background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 10, padding: 12 }}>
-                <div style={{ fontSize: 10.5, color: 'var(--muted)', marginBottom: 6 }}>{s.label}</div>
-                <div style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 16, fontWeight: 700, color: s.muted ? 'var(--muted)' : 'var(--accent)' }}>{s.value}</div>
-                {s.diff !== null && (
-                  <div style={{ fontSize: 11, marginTop: 4, color: parseFloat(s.diff) >= 0 ? '#16A34A' : '#DC2626', fontWeight: 600 }}>
-                    {parseFloat(s.diff) >= 0 ? '▲' : '▼'} {Math.abs(s.diff)}% vs mois préc.
-                  </div>
-                )}
-              </div>
-            ))}
+          <h2>{MOIS[mois.getMonth()]} {mois.getFullYear()}</h2>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button className="btn-ghost" onClick={() => setOffset((o) => o - 1)}>← Précédent</button>
+            <button className="btn-ghost" onClick={() => setOffset(0)} disabled={offset === 0}>Ce mois</button>
+            <button className="btn-ghost" onClick={() => setOffset((o) => Math.min(o + 1, 0))} disabled={offset === 0}>Suivant →</button>
           </div>
-        )}
+        </div>
 
         {loading ? (
           <div style={{ textAlign: 'center', padding: 30, color: 'var(--muted)' }}>Chargement...</div>
-        ) : data.length === 0 ? (
+        ) : totalCA === 0 ? (
           <div className="empty-state">
-            <div className="empty-icon" style={{ width: 44, height: 44, borderRadius: 11, background: 'var(--accent-pale)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="1.8" width="20" height="20"><rect x="2.5" y="5" width="19" height="14" rx="2.2"/><path d="M2.5 10h19"/><path d="M6 15h4"/></svg>
-            </div>
-            <h3>Aucune donnée ce mois</h3>
-            <p>Modifiez le mois pour voir d'autres données.</p>
+            <div className="empty-icon"><Icon.Card /></div>
+            <h3>Aucune vente ce mois-ci</h3>
+            <p>Changez de mois pour consulter d'autres données.</p>
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={240}>
-            <LineChart data={data} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+            <BarChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-              <XAxis dataKey="jour" tick={{ fontSize: 10, fill: 'var(--muted)' }} />
-              <YAxis tick={{ fontSize: 10, fill: 'var(--muted)' }} tickFormatter={(v) => `${(v/1000).toFixed(0)}k`} />
+              <XAxis dataKey="semaine" tick={{ fontSize: 11, fill: 'var(--muted)' }} />
+              <YAxis tick={{ fontSize: 11, fill: 'var(--muted)' }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
               <Tooltip formatter={(v) => [`${parseInt(v).toLocaleString('fr-FR')} F`]} contentStyle={{ borderRadius: 8, border: '1px solid var(--border)', fontSize: 12 }} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Line type="monotone" dataKey="ca" name="CA" stroke="#1A7A50" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="benefice" name="Bénéfice" stroke="#22A06B" strokeWidth={2} dot={false} strokeDasharray="4 2" />
-            </LineChart>
+              <Bar dataKey="ca" name="CA" fill="#1A7A50" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="benefice" name="Bénéfice" fill="#22A06B" radius={[4, 4, 0, 0]} />
+            </BarChart>
           </ResponsiveContainer>
         )}
       </div>

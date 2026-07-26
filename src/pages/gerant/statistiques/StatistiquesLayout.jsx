@@ -1,23 +1,15 @@
 import { NavLink, Outlet, useOutletContext } from 'react-router-dom'
 
-const tabs = [
-  { to: 'vendeurs', label: 'Vendeurs' },
-  { to: 'ventes', label: 'Ventes' },
-  { to: 'benefices', label: 'Bénéfices' },
-]
-
 export default function StatistiquesLayout() {
-  const ctx = useOutletContext()
+  const context = useOutletContext()
   return (
     <>
       <div className="sub-tabs">
-        {tabs.map((t) => (
-          <NavLink key={t.to} to={t.to} className={({ isActive }) => `sub-tab ${isActive ? 'active' : ''}`}>
-            {t.label}
-          </NavLink>
-        ))}
+        <NavLink to="vendeurs" className={({ isActive }) => `sub-tab ${isActive ? 'active' : ''}`}>Par vendeur</NavLink>
+        <NavLink to="ventes" className={({ isActive }) => `sub-tab ${isActive ? 'active' : ''}`}>Ventes</NavLink>
+        <NavLink to="benefices" className={({ isActive }) => `sub-tab ${isActive ? 'active' : ''}`}>Bénéfices</NavLink>
       </div>
-      <Outlet context={ctx} />
+      <Outlet context={context} />
     </>
   )
 }

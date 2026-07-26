@@ -66,7 +66,7 @@ export default function Login() {
 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('role')
+      .select('role, actif')
       .eq('id', data.user.id)
       .single()
 
@@ -74,6 +74,12 @@ export default function Login() {
 
     if (profileError || !profile) {
       setError("Profil introuvable. Contactez l'administrateur.")
+      return
+    }
+
+    if (profile.actif === false) {
+      setError("Votre compte a été suspendu. Contactez votre gérant ou l'administrateur.")
+      await supabase.auth.signOut()
       return
     }
 

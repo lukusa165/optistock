@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { supabase } from '../../../lib/supabaseClient.js'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts'
-
+import { Icon } from '../../../components/Icons.jsx'
 export default function Journalier() {
   const { etablissement } = useOutletContext()
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10))
