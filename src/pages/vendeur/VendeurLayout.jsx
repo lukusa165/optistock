@@ -10,6 +10,7 @@ export default function VendeurLayout() {
   const [etablissement, setEtablissement] = useState(null)
   const [chargementTermine, setChargementTermine] = useState(false)
   const [erreurProfil, setErreurProfil] = useState('')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   useEffect(() => {
     chargerProfil()
@@ -103,6 +104,7 @@ export default function VendeurLayout() {
         .logout-btn:hover { color: var(--danger); background: rgba(220,38,38,.06); }
         .logout-btn svg { width: 14px; height: 14px; }
         .main { flex: 1; overflow-y: auto; padding: 16px 20px; }
+        .mobile-topbar { display: none; }
         .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px; margin-bottom: 12px; box-shadow: var(--shadow); }
         .panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
         .panel-head h2 { font-family: 'Space Grotesk', sans-serif; font-size: 13.5px; font-weight: 700; color: var(--text); }
@@ -124,9 +126,55 @@ export default function VendeurLayout() {
         .empty-state p { font-size: 11.5px; color: var(--muted); max-width: 240px; line-height: 1.5; }
         .alert-error { background: #FEF2F2; border: 1px solid #FECACA; color: #DC2626; padding: 9px 12px; border-radius: 8px; font-size: 11.5px; margin-bottom: 12px; }
         .alert-success { background: #F0FDF4; border: 1px solid #BBF7D0; color: #15803D; padding: 9px 12px; border-radius: 8px; font-size: 11.5px; margin-bottom: 12px; }
+
+        .hamburger-btn {
+          display: none; width: 36px; height: 36px; border-radius: 9px;
+          background: var(--panel); border: 1px solid var(--border); color: var(--text);
+          align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
+        }
+        .hamburger-btn svg { width: 19px; height: 19px; }
+        .sidebar-overlay { display: none; }
+
+        @media (max-width: 768px) {
+          .gr { display: block; height: auto; overflow: visible; }
+          .mobile-topbar {
+            display: flex; align-items: center; gap: 12px;
+            padding: 12px 16px; background: var(--bg-2); border-bottom: 1px solid var(--border);
+            position: sticky; top: 0; z-index: 80;
+          }
+          .mobile-topbar .gr-brand-name { font-size: 14px; }
+          .hamburger-btn { display: flex; }
+          .sidebar {
+            position: fixed; top: 0; left: 0; height: 100vh; width: 220px; z-index: 110;
+            transform: translateX(-100%);
+            transition: transform .2s ease;
+          }
+          .sidebar.open { transform: translateX(0); }
+          .sidebar-overlay.open {
+            display: block; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.35); z-index: 100;
+          }
+          .main { padding: 14px 16px; height: auto; overflow: visible; }
+        }
       `}</style>
 
-      <aside className="sidebar">
+      <div className="mobile-topbar">
+        <button className="hamburger-btn" onClick={() => setSidebarOpen(true)}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <line x1="3" y1="12" x2="21" y2="12"></line>
+            <line x1="3" y1="18" x2="21" y2="18"></line>
+          </svg>
+        </button>
+        <div className="gr-brand-name">Opti<span style={{ color: 'var(--accent)' }}>Stock</span></div>
+      </div>
+
+      <div
+        className={`sidebar-overlay ${sidebarOpen ? 'open' : ''}`}
+        onClick={() => setSidebarOpen(false)}
+      ></div>
+
+      <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-top">
           <div className="gr-brand">
             <img src={logo} alt="OptiStock" />
@@ -139,7 +187,12 @@ export default function VendeurLayout() {
           {navItems.map((item) => {
             const IconComp = Icon[item.icon]
             return (
-              <NavLink key={item.to} to={item.to} className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}>
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                onClick={() => setSidebarOpen(false)}
+              >
                 <IconComp />
                 {item.label}
               </NavLink>
