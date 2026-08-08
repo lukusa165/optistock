@@ -174,7 +174,7 @@ export default function Login() {
                     type="text"
                     id="userId"
                     name="userId"
-                    placeholder="Ex : 0831511015"
+                    placeholder="Ex : 0831412014"
                     autoComplete="username"
                     value={form.userId}
                     onChange={handleChange}
