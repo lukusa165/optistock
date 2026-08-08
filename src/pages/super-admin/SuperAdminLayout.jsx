@@ -9,6 +9,7 @@ export default function SuperAdminLayout() {
   const [etablissements, setEtablissementsRaw] = useState([])
   const [loadingEtablissements, setLoadingEtablissements] = useState(true)
   const [loadError, setLoadError] = useState('')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [plans] = useState([
     { id: 1, nom: 'Essai gratuit', prix: 'Gratuit / 30 jours', vendeurs: 1, essaiGratuit: true },
     { id: 2, nom: 'Essentiel', prix: '9 000 F / mois', vendeurs: 2, essaiGratuit: false },
@@ -163,6 +164,7 @@ export default function SuperAdminLayout() {
         .main { flex: 1; padding: 28px 32px; overflow-x: hidden; }
 
         .topbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; flex-wrap: wrap; gap: 14px; }
+        .topbar-left { display: flex; align-items: center; gap: 12px; }
         .topbar-left h1 { font-family: 'Space Grotesk', sans-serif; font-size: 21px; font-weight: 700; color: var(--text); }
         .topbar-left p { font-size: 12.5px; color: var(--muted); margin-top: 3px; }
         .topbar-actions { display: flex; align-items: center; gap: 10px; }
@@ -318,20 +320,44 @@ export default function SuperAdminLayout() {
         .cred-copy { padding: 5px 12px; border-radius: 7px; border: 1px solid #BBF7D0; background: transparent; color: #15803D; font-size: 11.5px; font-weight: 600; cursor: pointer; font-family: 'Inter', sans-serif; }
         .cred-copy:hover { background: #DCFCE7; }
 
+        .hamburger-btn {
+          display: none; width: 38px; height: 38px; border-radius: 10px;
+          background: var(--panel); border: 1px solid var(--border); color: var(--text);
+          align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
+        }
+        .hamburger-btn svg { width: 20px; height: 20px; }
+
+        .sidebar-overlay { display: none; }
+
         @media (max-width: 1100px) {
           .stats-grid { grid-template-columns: repeat(2, 1fr); }
           .plans-grid { grid-template-columns: repeat(2, 1fr); }
           .cap-grid { grid-template-columns: repeat(2, 1fr); }
         }
         @media (max-width: 768px) {
-          .sidebar { display: none; }
+          .hamburger-btn { display: flex; }
+          .sidebar {
+            position: fixed; top: 0; left: 0; z-index: 110;
+            transform: translateX(-100%);
+            transition: transform .2s ease;
+          }
+          .sidebar.open { transform: translateX(0); }
+          .sidebar-overlay.open {
+            display: block; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.35); z-index: 100;
+          }
           .main { padding: 20px 16px; }
           .stats-grid { grid-template-columns: repeat(2, 1fr); }
           .settings-grid { grid-template-columns: 1fr; }
         }
       `}</style>
 
-      <aside className="sidebar">
+      <div
+        className={`sidebar-overlay ${sidebarOpen ? 'open' : ''}`}
+        onClick={() => setSidebarOpen(false)}
+      ></div>
+
+      <aside className={`sidebar ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-top">
           <div className="sa-brand">
             <img src={logo} alt="OptiStock" />
@@ -351,6 +377,7 @@ export default function SuperAdminLayout() {
                 key={item.to}
                 to={item.to}
                 className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                onClick={() => setSidebarOpen(false)}
               >
                 <IconComp />
                 {item.label}
@@ -377,8 +404,17 @@ export default function SuperAdminLayout() {
       <main className="main">
         <div className="topbar">
           <div className="topbar-left">
-            <h1>Espace Super Administrateur</h1>
-            <p>Plateforme de gestion · OptiStock</p>
+            <button className="hamburger-btn" onClick={() => setSidebarOpen(true)}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
+              </svg>
+            </button>
+            <div>
+              <h1>Espace Super Administrateur</h1>
+              <p>Plateforme de gestion · OptiStock</p>
+            </div>
           </div>
           <div className="topbar-actions">
             <div className="search-box">
