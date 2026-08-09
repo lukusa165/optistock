@@ -7,8 +7,12 @@ export default function MotsDePasse() {
   const [comptes, setComptes] = useState([])
   const [resultat, setResultat] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [demandesPubliques, setDemandesPubliques] = useState([])
 
-  useEffect(() => { charger() }, [])
+  useEffect(() => {
+    charger()
+    chargerDemandesPubliques()
+  }, [])
 
   const charger = async () => {
     const { data } = await supabase
@@ -17,6 +21,15 @@ export default function MotsDePasse() {
       .in('role', ['gerant', 'vendeur'])
       .order('nom_complet')
     setComptes(data || [])
+  }
+
+  const chargerDemandesPubliques = async () => {
+    const { data } = await supabase
+      .from('demandes_publiques')
+      .select('*')
+      .eq('statut', 'en_attente')
+      .order('created_at', { ascending: false })
+    setDemandesPubliques(data || [])
   }
 
   const filtres = comptes.filter((c) =>
@@ -35,43 +48,104 @@ export default function MotsDePasse() {
     setLoading(false)
   }
 
-  return (
-    <div className="panel">
-      <div className="panel-head">
-        <h2>Réinitialiser un mot de passe</h2>
-        <input
-          type="text" placeholder="Rechercher un nom ou numéro..." value={recherche}
-          onChange={(e) => setRecherche(e.target.value)}
-          style={{ border: '1.5px solid var(--border)', borderRadius: 8, padding: '7px 12px', fontSize: 12.5, background: 'var(--panel-2)', outline: 'none', width: 240 }}
-        />
-      </div>
+  // Pour une demande publique de type "mot de passe" : on retrouve le compte via son numéro de téléphone
+  const traiterDemandeMdp = async (demande) => {
+    setLoading(true)
 
-      {resultat && (
-        <div className="credentials-box">
-          <div className="cred-title"><Icon.Key style={{ width: 14, height: 14 }} />Nouveau mot de passe — {resultat.nom}</div>
-          <div className="cred-row">
-            <div><div className="cred-label">MOT DE PASSE</div><div className="cred-value">{resultat.mdp}</div></div>
-            <button className="cred-copy" onClick={() => navigator.clipboard.writeText(resultat.mdp)}>Copier</button>
-          </div>
+    const { data: profil } = await supabase
+      .from('profiles')
+      .select('id, nom_complet')
+      .eq('telephone', demande.telephone)
+      .single()
+
+    if (!profil) {
+      alert("Aucun compte trouvé avec ce numéro. Vérifiez auprès de la personne.")
+      setLoading(false)
+      return
+    }
+
+    const { data, error } = await supabase.functions.invoke('reinitialiser-mot-de-passe', { body: { user_id: profil.id } })
+    if (error || data?.error) {
+      alert(`Erreur : ${data?.error || error.message}`)
+      setLoading(false)
+      return
+    }
+
+    await supabase.from('demandes_publiques').update({ statut: 'traitee', traite_le: new Date().toISOString() }).eq('id', demande.id)
+    setResultat({ nom: profil.nom_complet, mdp: data.mot_de_passe })
+    setDemandesPubliques((list) => list.filter((d) => d.id !== demande.id))
+    setLoading(false)
+  }
+
+  const marquerAideTraitee = async (demande) => {
+    await supabase.from('demandes_publiques').update({ statut: 'traitee', traite_le: new Date().toISOString() }).eq('id', demande.id)
+    setDemandesPubliques((list) => list.filter((d) => d.id !== demande.id))
+  }
+
+  return (
+    <>
+      {demandesPubliques.length > 0 && (
+        <div className="panel" style={{ borderColor: 'var(--warning)' }}>
+          <div className="panel-head"><h2>Demandes publiques en attente ({demandesPubliques.length})</h2></div>
+          {demandesPubliques.map((d) => (
+            <div key={d.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 4px', borderBottom: '1px solid var(--border)' }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
+                  {d.type === 'mot_de_passe' ? '🔑 Mot de passe oublié' : "💬 Besoin d'aide"}
+                  {d.nom ? ` — ${d.nom}` : ''}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
+                  {d.email || d.telephone}{d.message ? ` — ${d.message}` : ''}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{new Date(d.created_at).toLocaleString('fr-FR')}</div>
+              </div>
+              {d.type === 'mot_de_passe' ? (
+                <button className="btn-primary" disabled={loading} onClick={() => traiterDemandeMdp(d)}>Réinitialiser</button>
+              ) : (
+                <button className="btn-ghost" onClick={() => marquerAideTraitee(d)}>Marquer traité</button>
+              )}
+            </div>
+          ))}
         </div>
       )}
 
-      <table>
-        <thead><tr><th>Nom</th><th>Numéro</th><th>Rôle</th><th>Établissement</th><th></th></tr></thead>
-        <tbody>
-          {filtres.map((c) => (
-            <tr key={c.id}>
-              <td className="name-cell">{c.nom_complet}</td>
-              <td style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12.5 }}>{c.telephone}</td>
-              <td><span className="badge" style={{ color: 'var(--accent)', background: 'var(--accent-pale)' }}>{c.role}</span></td>
-              <td style={{ fontSize: 12.5, color: 'var(--muted)' }}>{c.etablissements?.nom || '—'}</td>
-              <td>
-                <button className="btn-ghost" disabled={loading} onClick={() => reinitialiser(c)}>Réinitialiser</button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+      <div className="panel">
+        <div className="panel-head">
+          <h2>Réinitialiser un mot de passe</h2>
+          <input
+            type="text" placeholder="Rechercher un nom ou numéro..." value={recherche}
+            onChange={(e) => setRecherche(e.target.value)}
+            style={{ border: '1.5px solid var(--border)', borderRadius: 8, padding: '7px 12px', fontSize: 12.5, background: 'var(--panel-2)', outline: 'none', width: 240 }}
+          />
+        </div>
+
+        {resultat && (
+          <div className="credentials-box">
+            <div className="cred-title"><Icon.Key style={{ width: 14, height: 14 }} />Nouveau mot de passe — {resultat.nom}</div>
+            <div className="cred-row">
+              <div><div className="cred-label">MOT DE PASSE</div><div className="cred-value">{resultat.mdp}</div></div>
+              <button className="cred-copy" onClick={() => navigator.clipboard.writeText(resultat.mdp)}>Copier</button>
+            </div>
+          </div>
+        )}
+
+        <table>
+          <thead><tr><th>Nom</th><th>Numéro</th><th>Rôle</th><th>Établissement</th><th></th></tr></thead>
+          <tbody>
+            {filtres.map((c) => (
+              <tr key={c.id}>
+                <td className="name-cell">{c.nom_complet}</td>
+                <td style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12.5 }}>{c.telephone}</td>
+                <td><span className="badge" style={{ color: 'var(--accent)', background: 'var(--accent-pale)' }}>{c.role}</span></td>
+                <td style={{ fontSize: 12.5, color: 'var(--muted)' }}>{c.etablissements?.nom || '—'}</td>
+                <td>
+                  <button className="btn-ghost" disabled={loading} onClick={() => reinitialiser(c)}>Réinitialiser</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   )
 }

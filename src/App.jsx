@@ -2,9 +2,15 @@ import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { supabase } from './lib/supabaseClient.js'
 
+import Accueil from './pages/accueil/Accueil.jsx'
 import Login from './pages/login/Login.jsx'
+import InscriptionGerant from './pages/login/InscriptionGerant.jsx'
+import MotDePasseOublie from './pages/login/MotDePasseOublie.jsx'
+import ReinitialiserMotDePasse from './pages/login/ReinitialiserMotDePasse.jsx'
+import BesoinAide from './pages/login/BesoinAide.jsx'
 import SuperAdminLayout from './pages/super-admin/SuperAdminLayout.jsx'
 import EtablissementsLayout from './pages/super-admin/etablissements/EtablissementsLayout.jsx'
+import Inscriptions from './pages/super-admin/etablissements/Inscriptions.jsx'
 import Creation from './pages/super-admin/etablissements/Creation.jsx'
 import Modification from './pages/super-admin/etablissements/Modification.jsx'
 import Suppression from './pages/super-admin/etablissements/Suppression.jsx'
@@ -87,7 +93,6 @@ function RouteProtegee({ role, children }) {
         const { data: { session } } = await supabase.auth.getSession()
         if (!session) { setStatut('refuse'); return }
 
-        // Requête 1 : le profil seul, sans embed
         const { data: profile, error } = await supabase
           .from('profiles')
           .select('role, actif, etablissement_id')
@@ -95,7 +100,6 @@ function RouteProtegee({ role, children }) {
           .single()
         if (error) throw error
 
-        // Requête 2 : l'établissement, séparément (seulement si applicable)
         let etab = null
         if (profile?.role !== 'super_admin' && profile?.etablissement_id) {
           const { data: etabData } = await supabase
@@ -106,7 +110,6 @@ function RouteProtegee({ role, children }) {
           etab = etabData
         }
 
-        // Mode maintenance global : bloque tout le monde sauf le super admin
         if (profile?.role !== 'super_admin') {
           const { data: maintenance } = await supabase
             .from('parametres_globaux')
@@ -120,15 +123,12 @@ function RouteProtegee({ role, children }) {
           }
         }
 
-        // Blocage individuel (gérant a bloqué CE vendeur précisément)
         if (profile?.actif === false) {
           setMotifRefus('Votre compte a été suspendu.')
           setStatut('refuse')
           return
         }
 
-        // Blocage en cascade : le super admin a désactivé l'établissement,
-        // ou l'abonnement a expiré → gérant ET tous ses vendeurs sont bloqués
         if (profile?.role !== 'super_admin') {
           const abonnementExpire = etab?.date_fin_abonnement && new Date(etab.date_fin_abonnement) < new Date()
 
@@ -182,7 +182,7 @@ function RouteProtegee({ role, children }) {
           <div style={{ fontSize: 16, fontWeight: 700, color: '#0D1F16' }}>Accès suspendu</div>
           <div style={{ fontSize: 13, color: '#6B7A72', maxWidth: 320 }}>{motifRefus}</div>
           <button onClick={async () => { await supabase.auth.signOut(); window.location.href = '/' }} style={{ background: '#1A7A50', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 9, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-            Retour à la connexion
+            Retour à l'accueil
           </button>
         </div>
       )
@@ -197,12 +197,20 @@ function App() {
     <BrowserRouter>
       <BanniereHorsLigne />
       <Routes>
-        <Route path="/" element={<Login />} />
+        {/* La page d'accueil est toujours la toute première chose vue, jamais contournée */}
+        <Route path="/" element={<Accueil />} />
+
+        <Route path="/connexion" element={<Login />} />
+        <Route path="/inscription" element={<InscriptionGerant />} />
+        <Route path="/mot-de-passe-oublie" element={<MotDePasseOublie />} />
+        <Route path="/reinitialiser-mot-de-passe" element={<ReinitialiserMotDePasse />} />
+        <Route path="/aide" element={<BesoinAide />} />
 
         <Route path="/super-admin" element={<RouteProtegee role="super_admin"><SuperAdminLayout /></RouteProtegee>}>
           <Route index element={<Navigate to="etablissements" replace />} />
           <Route path="etablissements" element={<EtablissementsLayout />}>
-            <Route index element={<Navigate to="creation" replace />} />
+            <Route index element={<Navigate to="inscriptions" replace />} />
+            <Route path="inscriptions" element={<Inscriptions />} />
             <Route path="creation" element={<Creation />} />
             <Route path="modification" element={<Modification />} />
             <Route path="suppression" element={<Suppression />} />
@@ -282,6 +290,7 @@ function App() {
           <Route path="historique" element={<MesVentes />} />
         </Route>
 
+        {/* Toute route inconnue ramène à l'accueil, jamais un écran blanc */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

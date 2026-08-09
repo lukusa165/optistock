@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import logo from '../../assets/logo.png'
 import { supabase, telephoneVersEmail } from '../../lib/supabaseClient.js'
 
@@ -39,8 +39,9 @@ export default function Login() {
 
     setLoading(true)
 
+    const identifiantEstEmail = form.userId.includes('@')
     const { data, error: authError } = await supabase.auth.signInWithPassword({
-      email: telephoneVersEmail(form.userId),
+      email: identifiantEstEmail ? form.userId.trim() : telephoneVersEmail(form.userId),
       password: form.password,
     })
 
@@ -139,9 +140,12 @@ export default function Login() {
         .btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
         .btn-ghost { background: transparent; color: var(--muted); border: 1.5px solid #24382E; }
         .btn-ghost:hover:not(:disabled) { color: #F4F7F5; border-color: #3A5346; }
+        .btn-signup { width: 100%; background: transparent; border: 1.5px solid var(--accent-light); color: var(--accent-light); }
+        .btn-signup:hover:not(:disabled) { background: rgba(51,179,122,0.1); }
         .links { display: flex; justify-content: space-between; margin-top: 18px; }
         .links a { font-size: 12.5px; color: var(--muted); text-decoration: none; border-bottom: 1px solid transparent; }
         .links a:hover { color: var(--accent); border-bottom-color: var(--accent); }
+        .signup-block { margin-top: 14px; padding-top: 14px; border-top: 1px solid #1D2E25; }
         .footer { text-align: center; padding: 14px 0 6px; }
         .footer span { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; letter-spacing: 0.06em; color: rgba(244,247,245,0.45); }
         .footer span b { color: var(--accent-light); font-weight: 500; }
@@ -165,7 +169,7 @@ export default function Login() {
 
             <form onSubmit={handleSubmit}>
               <div className="field">
-                <label htmlFor="userId">Numéro de téléphone</label>
+                <label htmlFor="userId">Email ou numéro de téléphone</label>
                 <div className="input-wrap">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.4 2 2 0 0 1 3.6 1.22h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.91 8.84a16 16 0 0 0 6 6l.94-.94a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21.73 16.92Z"/>
@@ -174,7 +178,7 @@ export default function Login() {
                     type="text"
                     id="userId"
                     name="userId"
-                    placeholder="Ex : 0831412014"
+                    placeholder="083... OU   @GMAIL"
                     autoComplete="username"
                     value={form.userId}
                     onChange={handleChange}
@@ -228,8 +232,14 @@ export default function Login() {
             </form>
 
             <div className="links">
-              <a href="#">Mot de passe oublié ?</a>
-              <a href="#">Besoin d'aide ?</a>
+              <Link to="/mot-de-passe-oublie">Mot de passe oublié ?</Link>
+              <Link to="/aide">Besoin d'aide ?</Link>
+            </div>
+
+            <div className="signup-block">
+              <button type="button" className="btn btn-signup" onClick={() => navigate('/inscription')}>
+                Vous êtes commerçant ? Créez votre compte
+              </button>
             </div>
           </div>
         </div>

@@ -1,9 +1,22 @@
 import { useState, useEffect } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { Icon } from '../../../components/Icons.jsx'
-import { supabase, telephoneVersEmail, genererNumeroVendeur, genererMotDePasse } from '../../../lib/supabaseClient.js'
+import { supabase, telephoneVersEmail, genererMotDePasse } from '../../../lib/supabaseClient.js'
 
-const NUMERO_SUPER_ADMIN = '0831511015'
+// Génère un numéro de vendeur même si le gérant n'a pas de téléphone
+// (cas d'un gérant inscrit par email) — utilise alors l'établissement comme base.
+function genererNumeroVendeurSecurise(telephoneGerant, etablissementId) {
+  let base
+  if (telephoneGerant) {
+    base = telephoneGerant.replace(/\D/g, '').slice(0, 3).padStart(3, '0')
+  } else {
+    const chiffres = (etablissementId || '').replace(/\D/g, '')
+    base = (chiffres.slice(0, 3) || '').padStart(3, '7')
+  }
+  let reste = ''
+  for (let i = 0; i < 7; i++) reste += Math.floor(Math.random() * 10)
+  return base + reste
+}
 
 export default function CreerVendeur() {
   const { etablissement, gerant } = useOutletContext()
@@ -28,7 +41,6 @@ export default function CreerVendeur() {
       .select('limite_vendeurs')
       .eq('nom', etablissement.plan)
       .single()
-    // limite_vendeurs null en base = illimité
     setLimite(data ? (data.limite_vendeurs ?? Infinity) : 1)
   }
 
@@ -58,7 +70,7 @@ export default function CreerVendeur() {
 
     setLoading(true)
 
-    const numeroVendeur = genererNumeroVendeur(gerant.telephone, NUMERO_SUPER_ADMIN)
+    const numeroVendeur = genererNumeroVendeurSecurise(gerant.telephone, etablissement.id)
     const motDePasse = genererMotDePasse()
     const emailVendeur = telephoneVersEmail(numeroVendeur)
 

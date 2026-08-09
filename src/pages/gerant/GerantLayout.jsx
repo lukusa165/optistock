@@ -104,7 +104,7 @@ export default function GerantLayout() {
       })
     }
     await supabase.auth.signOut()
-    navigate('/')
+    navigate('/connexion')
   }
 
   const navItems = [

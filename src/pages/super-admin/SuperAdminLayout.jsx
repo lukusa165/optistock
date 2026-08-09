@@ -56,7 +56,7 @@ export default function SuperAdminLayout() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
-    navigate('/')
+    navigate('/connexion')
   }
 
   return (
