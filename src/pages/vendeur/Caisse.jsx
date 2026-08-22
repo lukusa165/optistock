@@ -8,10 +8,11 @@ export default function Caisse() {
   const [articles, setArticles] = useState([])
   const [recherche, setRecherche] = useState('')
   const [suggestions, setSuggestions] = useState([])
-  const [panier, setPanier] = useState([]) // [{article, quantite}]
+  const [panier, setPanier] = useState([])
+  const [nomClient, setNomClient] = useState('')
   const [error, setError] = useState('')
-  const [succes, setSucces] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [recu, setRecu] = useState(null)
   const inputRef = useRef(null)
 
   useEffect(() => {
@@ -23,6 +24,7 @@ export default function Caisse() {
       .from('articles')
       .select('id, nom, prix_vente, quantite, emplacement')
       .eq('etablissement_id', etablissement.id)
+      .eq('archive', false)
       .gt('quantite', 0)
       .order('nom', { ascending: true })
     setArticles(data || [])
@@ -66,6 +68,7 @@ export default function Caisse() {
 
   const annulerTout = () => {
     setPanier([])
+    setNomClient('')
     setError('')
   }
 
@@ -80,6 +83,7 @@ export default function Caisse() {
       p_etablissement_id: etablissement.id,
       p_vendeur_id: vendeur.id,
       p_lignes: lignes,
+      p_nom_client: nomClient.trim() || null,
     })
 
     if (rpcError) {
@@ -87,29 +91,80 @@ export default function Caisse() {
         ? rpcError.message.replace(/^.*?:\s*/, '')
         : `Erreur : ${rpcError.message}`)
       setLoading(false)
-      // Recharger les articles au cas où le stock a changé entre-temps
       chargerArticles()
       return
     }
 
-    setSucces({ total, nbArticles: panier.length })
+    setRecu({
+      numeroVente: data,
+      date: new Date(),
+      nomClient: nomClient.trim() || null,
+      nomVendeur: vendeur.nom_complet,
+      nomEtablissement: etablissement.nom,
+      lignes: panier.map((l) => ({
+        nom: l.article.nom,
+        quantite: l.quantite,
+        prixUnitaire: l.article.prix_vente,
+        sousTotal: l.article.prix_vente * l.quantite,
+      })),
+      total,
+    })
+
     setPanier([])
+    setNomClient('')
     setLoading(false)
     chargerArticles()
-    setTimeout(() => setSucces(null), 3000)
+  }
+
+  const imprimer = () => {
+    window.print()
   }
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 14, alignItems: 'start' }}>
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          #zone-impression, #zone-impression * { visibility: visible; }
+          #zone-impression {
+            position: absolute; top: 0; left: 0; width: 80mm; padding: 8px;
+            font-family: 'Courier New', monospace; font-size: 12px; color: #000;
+          }
+        }
+        .recu-ligne { display: flex; justify-content: space-between; margin-bottom: 3px; }
+        .recu-sep { border-top: 1px dashed #999; margin: 8px 0; }
+      `}</style>
+
       {/* Colonne recherche */}
       <div className="panel">
         <div className="panel-head"><h2>Nouvel achat</h2></div>
 
-        {succes && (
-          <div className="alert-success">
-            ✓ Vente enregistrée — {succes.nbArticles} article(s), {f(succes.total)}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16,
+          background: 'var(--accent-pale)', border: '1px solid rgba(26,122,80,.18)',
+          borderRadius: 10, padding: '10px 13px',
+        }}>
+          <div style={{
+            width: 30, height: 30, borderRadius: 8, background: '#fff', flexShrink: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)',
+          }}>
+            <Icon.Users style={{ width: 15, height: 15 }} />
           </div>
-        )}
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 9.5, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 3 }}>
+              Client (optionnel)
+            </div>
+            <input
+              value={nomClient}
+              onChange={(e) => setNomClient(e.target.value)}
+              placeholder="Nom du client pour la facture"
+              style={{
+                width: '100%', border: 'none', background: 'transparent', outline: 'none',
+                fontSize: 13.5, fontWeight: 600, color: 'var(--text)', fontFamily: 'Inter, sans-serif', padding: 0,
+              }}
+            />
+          </div>
+        </div>
 
         <div style={{ position: 'relative' }}>
           <input
@@ -178,9 +233,9 @@ export default function Caisse() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <button onClick={() => modifierQuantite(l.article.id, -1)} className="qty-btn" style={qtyBtnStyle}>−</button>
+                  <button onClick={() => modifierQuantite(l.article.id, -1)} style={qtyBtnStyle}>−</button>
                   <span style={{ minWidth: 22, textAlign: 'center', fontWeight: 700, fontSize: 13 }}>{l.quantite}</span>
-                  <button onClick={() => modifierQuantite(l.article.id, 1)} className="qty-btn" style={qtyBtnStyle}>+</button>
+                  <button onClick={() => modifierQuantite(l.article.id, 1)} style={qtyBtnStyle}>+</button>
                 </div>
                 <div style={{ width: 90, textAlign: 'right', fontWeight: 700, color: 'var(--accent)', fontSize: 13.5 }}>
                   {f(l.article.prix_vente * l.quantite)}
@@ -200,35 +255,92 @@ export default function Caisse() {
 
         {error && <div className="alert-error">{error}</div>}
 
-        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>
-          {panier.length} article{panier.length > 1 ? 's' : ''}
-        </div>
+        {recu ? (
+          <>
+            <div className="alert-success">✓ Vente enregistrée — {recu.lignes.length} article(s), {f(recu.total)}</div>
+            <button className="btn-primary" style={{ width: '100%', justifyContent: 'center', marginBottom: 8 }} onClick={imprimer}>
+              <Icon.FilePlus style={{ width: 15, height: 15 }} />
+              Imprimer la facture
+            </button>
+            <button className="btn-ghost" style={{ width: '100%', justifyContent: 'center' }} onClick={() => setRecu(null)}>
+              Nouvelle vente
+            </button>
+          </>
+        ) : (
+          <>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>
+              {panier.length} article{panier.length > 1 ? 's' : ''}
+            </div>
 
-        <div style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
-          padding: '14px 0', borderTop: '1px dashed var(--border)', borderBottom: '1px dashed var(--border)', marginBottom: 16,
-        }}>
-          <span style={{ fontSize: 13, color: 'var(--text-2)', fontWeight: 600 }}>Total</span>
-          <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 24, fontWeight: 700, color: 'var(--accent)' }}>{f(total)}</span>
-        </div>
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'baseline',
+              padding: '14px 0', borderTop: '1px dashed var(--border)', borderBottom: '1px dashed var(--border)', marginBottom: 16,
+            }}>
+              <span style={{ fontSize: 13, color: 'var(--text-2)', fontWeight: 600 }}>Total</span>
+              <span style={{ fontFamily: 'Space Grotesk, sans-serif', fontSize: 24, fontWeight: 700, color: 'var(--accent)' }}>{f(total)}</span>
+            </div>
 
-        <button
-          className="btn-primary"
-          style={{ width: '100%', justifyContent: 'center', padding: '12px', fontSize: 14 }}
-          disabled={panier.length === 0 || loading}
-          onClick={valider}
-        >
-          {loading ? 'Enregistrement...' : 'OK — Confirmer la vente'}
-        </button>
-        <button
-          className="btn-ghost"
-          style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
-          disabled={panier.length === 0 || loading}
-          onClick={annulerTout}
-        >
-          Annuler
-        </button>
+            <button
+              className="btn-primary"
+              style={{ width: '100%', justifyContent: 'center', padding: '12px', fontSize: 14 }}
+              disabled={panier.length === 0 || loading}
+              onClick={valider}
+            >
+              {loading ? 'Enregistrement...' : 'OK — Confirmer la vente'}
+            </button>
+            <button
+              className="btn-ghost"
+              style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
+              disabled={panier.length === 0 || loading}
+              onClick={annulerTout}
+            >
+              Annuler
+            </button>
+          </>
+        )}
       </div>
+
+      {/* Zone imprimable, invisible à l'écran normal, visible uniquement lors de l'impression */}
+      {recu && (
+        <div id="zone-impression" style={{ display: 'none' }}>
+          <div style={{ textAlign: 'center', marginBottom: 10 }}>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>{recu.nomEtablissement}</div>
+            <div style={{ fontSize: 10, marginTop: 2 }}>Facture de vente</div>
+          </div>
+
+          <div className="recu-sep"></div>
+
+          <div className="recu-ligne"><span>Date</span><span>{recu.date.toLocaleString('fr-FR')}</span></div>
+          <div className="recu-ligne"><span>N° facture</span><span>{recu.numeroVente.slice(0, 8).toUpperCase()}</span></div>
+          <div className="recu-ligne"><span>Vendeur</span><span>{recu.nomVendeur}</span></div>
+          <div className="recu-ligne"><span>Client</span><span>{recu.nomClient || 'Non renseigné'}</span></div>
+
+          <div className="recu-sep"></div>
+
+          {recu.lignes.map((l, i) => (
+            <div key={i} style={{ marginBottom: 6 }}>
+              <div style={{ fontWeight: 600 }}>{l.nom}</div>
+              <div className="recu-ligne">
+                <span>{l.quantite} x {parseInt(l.prixUnitaire).toLocaleString('fr-FR')} F</span>
+                <span>{parseInt(l.sousTotal).toLocaleString('fr-FR')} F</span>
+              </div>
+            </div>
+          ))}
+
+          <div className="recu-sep"></div>
+
+          <div className="recu-ligne" style={{ fontWeight: 700, fontSize: 15 }}>
+            <span>TOTAL</span><span>{parseInt(recu.total).toLocaleString('fr-FR')} F</span>
+          </div>
+
+          <div className="recu-sep"></div>
+
+          <div style={{ textAlign: 'center', marginTop: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 600 }}>✓ Vente validée</div>
+            <div style={{ fontSize: 9, color: '#555', marginTop: 8 }}>Propulsé par StellarBrightSoftware</div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

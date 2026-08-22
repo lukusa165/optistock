@@ -93,62 +93,63 @@ export default function Login() {
     <div className="login-page">
       <style>{`
         :root {
-          --bg: #0B1F17; --bg-2: #0F2A20; --card: #12241C;
-          --accent: #1E8F5E; --accent-light: #33B37A; --muted: #6B7A72;
+          --bg: #F0F4F2; --bg-2: #FFFFFF; --card: #FFFFFF;
+          --accent: #1A7A50; --accent-light: #22A06B; --accent-pale: #E8F5EE;
+          --text: #0D1F16; --muted: #6B7A72; --border: #E3EBE6;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         .login-page {
           font-family: 'Inter', sans-serif;
-          background: radial-gradient(circle at 20% -10%, var(--bg-2), var(--bg) 60%);
+          background: radial-gradient(circle at 20% -10%, var(--accent-pale), var(--bg) 60%);
           min-height: 100vh; display: flex; align-items: center; justify-content: center;
           padding: 24px; position: relative; overflow: hidden;
         }
         .barcode-bg {
-          position: absolute; inset: 0; opacity: 0.06; pointer-events: none;
-          background-image: repeating-linear-gradient(90deg, #ffffff 0 2px, transparent 2px 6px, #ffffff 6px 9px, transparent 9px 18px, #ffffff 18px 21px, transparent 21px 30px);
+          position: absolute; inset: 0; opacity: 0.05; pointer-events: none;
+          background-image: repeating-linear-gradient(90deg, #1A7A50 0 2px, transparent 2px 6px, #1A7A50 6px 9px, transparent 9px 18px, #1A7A50 18px 21px, transparent 21px 30px);
           mask-image: radial-gradient(circle at 30% 30%, black, transparent 65%);
         }
         .scene { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 400px; }
         .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 28px; }
         .brand-logo { width: 34px; height: 34px; object-fit: contain; }
-        .brand-name { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 20px; color: #F4F7F5; letter-spacing: -0.02em; }
-        .brand-name span { color: var(--accent-light); }
-        .card { background: var(--card); width: 100%; border-radius: 18px; box-shadow: 0 30px 60px -20px rgba(0,0,0,0.55); overflow: hidden; }
-        .scan-strip { height: 10px; width: 100%; background: repeating-linear-gradient(90deg, #F4F7F5 0 2px, transparent 2px 5px, #F4F7F5 5px 6px, transparent 6px 11px, #F4F7F5 11px 14px, transparent 14px 22px); position: relative; overflow: hidden; }
-        .scan-strip::after { content: ""; position: absolute; top: 0; left: -30%; width: 30%; height: 100%; background: linear-gradient(90deg, transparent, rgba(30,143,94,0.9), transparent); animation: scan 2.8s ease-in-out infinite; }
+        .brand-name { font-family: 'Space Grotesk', sans-serif; font-weight: 700; font-size: 20px; color: var(--text); letter-spacing: -0.02em; }
+        .brand-name span { color: var(--accent); }
+        .card { background: var(--card); width: 100%; border-radius: 18px; box-shadow: 0 20px 50px -20px rgba(13,31,22,0.18); overflow: hidden; border: 1px solid var(--border); }
+        .scan-strip { height: 10px; width: 100%; background: repeating-linear-gradient(90deg, #E8F5EE 0 2px, transparent 2px 5px, #E8F5EE 5px 6px, transparent 6px 11px, #E8F5EE 11px 14px, transparent 14px 22px); position: relative; overflow: hidden; }
+        .scan-strip::after { content: ""; position: absolute; top: 0; left: -30%; width: 30%; height: 100%; background: linear-gradient(90deg, transparent, rgba(26,122,80,0.7), transparent); animation: scan 2.8s ease-in-out infinite; }
         @keyframes scan { 0%{left:-30%} 50%{left:100%} 100%{left:100%} }
         @media (prefers-reduced-motion: reduce) { .scan-strip::after { display: none; } }
         .card-body { padding: 34px 32px 28px; }
-        .tagline { font-family: 'Space Grotesk', sans-serif; font-size: 15px; font-weight: 600; color: #F4F7F5; margin-bottom: 4px; }
+        .tagline { font-family: 'Space Grotesk', sans-serif; font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
         .subtext { font-size: 13px; color: var(--muted); margin-bottom: 26px; }
         .field { margin-bottom: 16px; }
         .field label { display: block; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
-        .input-wrap { display: flex; align-items: center; gap: 10px; border: 1.5px solid #24382E; border-radius: 10px; padding: 11px 13px; background: #0E1C15; transition: border-color .15s, box-shadow .15s; }
-        .input-wrap:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(30,143,94,0.18); }
+        .input-wrap { display: flex; align-items: center; gap: 10px; border: 1.5px solid var(--border); border-radius: 10px; padding: 11px 13px; background: var(--bg); transition: border-color .15s, box-shadow .15s; }
+        .input-wrap:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(26,122,80,0.14); }
         .input-wrap svg { width: 17px; height: 17px; color: var(--muted); flex-shrink: 0; }
         .input-wrap:focus-within svg { color: var(--accent); }
-        .input-wrap input { border: none; outline: none; background: transparent; font-family: 'Inter', sans-serif; font-size: 14px; width: 100%; color: #F4F7F5; }
-        .input-wrap input::placeholder { color: #5C6E64; }
+        .input-wrap input { border: none; outline: none; background: transparent; font-family: 'Inter', sans-serif; font-size: 14px; width: 100%; color: var(--text); }
+        .input-wrap input::placeholder { color: #A0ACA5; }
         .toggle-pass { cursor: pointer; color: var(--muted); display: flex; }
-        .toggle-pass:hover { color: #F4F7F5; }
-        .error-msg { background: rgba(194,75,63,.12); color: #E36A5C; font-size: 12.5px; padding: 10px 13px; border-radius: 9px; margin-bottom: 16px; border: 1px solid rgba(194,75,63,.2); line-height: 1.4; }
+        .toggle-pass:hover { color: var(--accent); }
+        .error-msg { background: #FEF2F2; color: #DC2626; font-size: 12.5px; padding: 10px 13px; border-radius: 9px; margin-bottom: 16px; border: 1px solid #FECACA; line-height: 1.4; }
         .actions { display: flex; gap: 10px; margin-top: 22px; }
         .btn { flex: 1; padding: 12px 14px; border-radius: 10px; font-family: 'Inter', sans-serif; font-weight: 600; font-size: 13.5px; cursor: pointer; border: none; transition: transform .12s, filter .12s; }
         .btn:active { transform: scale(0.97); }
         .btn:disabled { opacity: .6; cursor: not-allowed; }
-        .btn-primary { background: var(--accent); color: #fff; }
+        .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 4px 14px rgba(26,122,80,0.28); }
         .btn-primary:hover:not(:disabled) { filter: brightness(1.08); }
-        .btn-ghost { background: transparent; color: var(--muted); border: 1.5px solid #24382E; }
-        .btn-ghost:hover:not(:disabled) { color: #F4F7F5; border-color: #3A5346; }
-        .btn-signup { width: 100%; background: transparent; border: 1.5px solid var(--accent-light); color: var(--accent-light); }
-        .btn-signup:hover:not(:disabled) { background: rgba(51,179,122,0.1); }
+        .btn-ghost { background: transparent; color: var(--muted); border: 1.5px solid var(--border); }
+        .btn-ghost:hover:not(:disabled) { color: var(--text); border-color: #C7D6CD; }
+        .btn-signup { width: 100%; background: var(--accent-pale); border: 1.5px solid rgba(26,122,80,.25); color: var(--accent); }
+        .btn-signup:hover:not(:disabled) { background: #DCF0E5; }
         .links { display: flex; justify-content: space-between; margin-top: 18px; }
         .links a { font-size: 12.5px; color: var(--muted); text-decoration: none; border-bottom: 1px solid transparent; }
         .links a:hover { color: var(--accent); border-bottom-color: var(--accent); }
-        .signup-block { margin-top: 14px; padding-top: 14px; border-top: 1px solid #1D2E25; }
+        .signup-block { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
         .footer { text-align: center; padding: 14px 0 6px; }
-        .footer span { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; letter-spacing: 0.06em; color: rgba(244,247,245,0.45); }
-        .footer span b { color: var(--accent-light); font-weight: 500; }
+        .footer span { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; letter-spacing: 0.06em; color: #9AA8A0; }
+        .footer span b { color: var(--accent); font-weight: 600; }
       `}</style>
 
       <div className="barcode-bg"></div>
@@ -178,7 +179,7 @@ export default function Login() {
                     type="text"
                     id="userId"
                     name="userId"
-                    placeholder="083... OU   @GMAIL"
+                    placeholder="083... ou email"
                     autoComplete="username"
                     value={form.userId}
                     onChange={handleChange}

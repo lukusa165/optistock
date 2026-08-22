@@ -47,7 +47,7 @@ export default function InscriptionGerant() {
       user_id: authData.user.id,
       nom_etablissement: form.nomEtablissement.trim(),
       type_etablissement: form.type,
-      plan_souhaite: 'Essai gratuit', // fixé : l'inscription publique ne permet que l'essai gratuit
+      plan_souhaite: 'Essai gratuit',
     })
 
     if (insertError) {
@@ -58,8 +58,6 @@ export default function InscriptionGerant() {
 
     await supabase.auth.signOut()
 
-    // On efface immédiatement les données saisies de la mémoire du formulaire,
-    // pour qu'aucune trace ne reste visible si une autre personne utilise le même appareil ensuite.
     setForm(FORM_VIDE)
     setEnvoye(true)
     setLoading(false)
@@ -69,36 +67,38 @@ export default function InscriptionGerant() {
     <div className="login-page">
       <style>{`
         :root {
-          --bg: #0B1F17; --bg-2: #0F2A20; --card: #12241C;
-          --accent: #1E8F5E; --accent-light: #33B37A; --muted: #6B7A72;
+          --bg: #F0F4F2; --card: #FFFFFF; --border: #E3EBE6;
+          --accent: #1A7A50; --accent-light: #22A06B; --accent-pale: #E8F5EE;
+          --text: #0D1F16; --muted: #6B7A72;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         .login-page {
           font-family: 'Inter', sans-serif;
-          background: radial-gradient(circle at 20% -10%, var(--bg-2), var(--bg) 60%);
+          background: radial-gradient(circle at 20% -10%, var(--accent-pale), var(--bg) 60%);
           min-height: 100vh; display: flex; align-items: center; justify-content: center;
           padding: 24px;
         }
         .scene { width: 100%; max-width: 440px; }
-        .card { background: var(--card); width: 100%; border-radius: 18px; box-shadow: 0 30px 60px -20px rgba(0,0,0,0.55); overflow: hidden; }
+        .card { background: var(--card); width: 100%; border-radius: 18px; box-shadow: 0 20px 50px -20px rgba(13,31,22,0.18); overflow: hidden; border: 1px solid var(--border); }
         .card-body { padding: 34px 32px 28px; }
-        .tagline { font-family: 'Space Grotesk', sans-serif; font-size: 15px; font-weight: 600; color: #F4F7F5; margin-bottom: 4px; }
+        .tagline { font-family: 'Space Grotesk', sans-serif; font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 4px; }
         .subtext { font-size: 13px; color: var(--muted); margin-bottom: 26px; line-height: 1.5; }
         .field { margin-bottom: 16px; }
         .field label { display: block; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
         .field input, .field select {
-          width: 100%; border: 1.5px solid #24382E; border-radius: 10px; padding: 11px 13px;
-          background: #0E1C15; color: #F4F7F5; font-family: 'Inter', sans-serif; font-size: 14px; outline: none;
+          width: 100%; border: 1.5px solid var(--border); border-radius: 10px; padding: 11px 13px;
+          background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; font-size: 14px; outline: none;
         }
-        .field input:focus, .field select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(30,143,94,0.18); }
+        .field input:focus, .field select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(26,122,80,0.14); }
         .field .static-value {
-          background: #0E1C15; border: 1.5px solid #24382E; border-radius: 10px; padding: 11px 13px;
-          font-size: 14px; color: var(--accent-light); font-weight: 600; display: flex; align-items: center; gap: 8px;
+          background: var(--accent-pale); border: 1.5px solid rgba(26,122,80,.25); border-radius: 10px; padding: 11px 13px;
+          font-size: 14px; color: var(--accent); font-weight: 600; display: flex; align-items: center; gap: 8px;
         }
         .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .error-msg { background: rgba(194,75,63,.12); color: #E36A5C; font-size: 12.5px; padding: 10px 13px; border-radius: 9px; margin-bottom: 16px; }
-        .success-msg { background: rgba(30,143,94,.12); color: #33B37A; font-size: 13px; padding: 14px; border-radius: 10px; margin-bottom: 16px; line-height: 1.6; }
-        .btn { width: 100%; padding: 12px 14px; border-radius: 10px; font-weight: 600; font-size: 13.5px; cursor: pointer; border: none; background: var(--accent); color: #fff; }
+        .error-msg { background: #FEF2F2; color: #DC2626; font-size: 12.5px; padding: 10px 13px; border-radius: 9px; margin-bottom: 16px; border: 1px solid #FECACA; }
+        .success-msg { background: var(--accent-pale); color: #15803D; font-size: 13px; padding: 14px; border-radius: 10px; margin-bottom: 16px; line-height: 1.6; border: 1px solid rgba(26,122,80,.2); }
+        .btn { width: 100%; padding: 12px 14px; border-radius: 10px; font-weight: 600; font-size: 13.5px; cursor: pointer; border: none; background: var(--accent); color: #fff; box-shadow: 0 4px 14px rgba(26,122,80,0.28); }
+        .btn:hover:not(:disabled) { filter: brightness(1.08); }
         .btn:disabled { opacity: .6; cursor: not-allowed; }
         .back-link { display: block; text-align: center; margin-top: 18px; font-size: 12.5px; color: var(--muted); text-decoration: none; }
         .back-link:hover { color: var(--accent); }

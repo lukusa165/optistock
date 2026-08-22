@@ -35,14 +35,14 @@ export default function Accueil() {
     <div className="accueil-page">
       <style>{`
         :root {
-          --bg: #F7FAFD; --card: #FFFFFF; --border: #E1EBF5;
-          --accent: #2E90E0; --accent-light: #4FA8ED; --accent-pale: #EAF4FD;
-          --text: #14212E; --muted: #64748B;
+          --bg: #F0F4F2; --card: #FFFFFF; --border: #E3EBE6;
+          --accent: #1A7A50; --accent-light: #22A06B; --accent-pale: #E8F5EE;
+          --text: #0D1F16; --muted: #6B7A72;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         .accueil-page {
           font-family: 'Inter', sans-serif;
-          background: linear-gradient(180deg, #EFF7FE 0%, #F7FAFD 320px, #F7FAFD 100%);
+          background: linear-gradient(180deg, var(--accent-pale) 0%, var(--bg) 320px, var(--bg) 100%);
           min-height: 100vh; color: var(--text);
         }
         .nav { display: flex; align-items: center; justify-content: space-between; padding: 20px 6vw; }
@@ -53,7 +53,7 @@ export default function Accueil() {
         .nav-btn {
           padding: 9px 18px; border-radius: 9px; font-size: 13px; font-weight: 600; cursor: pointer;
           background: #fff; border: 1.5px solid var(--border); color: var(--text); font-family: 'Inter', sans-serif;
-          box-shadow: 0 1px 3px rgba(20,33,46,0.05);
+          box-shadow: 0 1px 3px rgba(13,31,22,0.05);
         }
         .nav-btn:hover { border-color: var(--accent); color: var(--accent); }
 
@@ -64,7 +64,7 @@ export default function Accueil() {
         .cta-primary {
           display: inline-flex; align-items: center; gap: 8px; background: var(--accent); color: #fff;
           border: none; padding: 14px 30px; border-radius: 12px; font-size: 15px; font-weight: 700;
-          cursor: pointer; font-family: 'Inter', sans-serif; box-shadow: 0 10px 30px -8px rgba(46,144,224,0.45);
+          cursor: pointer; font-family: 'Inter', sans-serif; box-shadow: 0 10px 30px -8px rgba(26,122,80,0.45);
           transition: filter .15s, transform .12s;
         }
         .cta-primary:hover { filter: brightness(1.06); transform: translateY(-1px); }
@@ -72,7 +72,7 @@ export default function Accueil() {
         .cta-sub button { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 12.5px; font-family: 'Inter', sans-serif; text-decoration: underline; padding: 0; }
 
         .features { max-width: 1080px; margin: 30px auto 0; padding: 0 6vw 80px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
-        .feature-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 24px; box-shadow: 0 2px 10px rgba(20,33,46,0.04); }
+        .feature-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 24px; box-shadow: 0 2px 10px rgba(13,31,22,0.04); }
         .feature-card h3 { font-family: 'Space Grotesk', sans-serif; font-size: 15px; font-weight: 700; margin-bottom: 10px; color: var(--text); }
         .feature-card p { font-size: 13px; color: var(--muted); line-height: 1.6; }
 
@@ -81,7 +81,7 @@ export default function Accueil() {
         .band p { font-size: 14px; color: var(--muted); max-width: 520px; margin: 0 auto 26px; line-height: 1.6; }
 
         .footer { text-align: center; padding: 28px 6vw; }
-        .footer span { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; letter-spacing: 0.06em; color: #94A3B8; }
+        .footer span { font-family: 'JetBrains Mono', monospace; font-size: 10.5px; letter-spacing: 0.06em; color: #9AA8A0; }
         .footer span b { color: var(--accent); font-weight: 600; }
 
         @media (max-width: 820px) {
