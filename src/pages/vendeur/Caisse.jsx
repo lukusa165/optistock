@@ -121,11 +121,20 @@ export default function Caisse() {
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 14, alignItems: 'start' }}>
+    <div className="caisse-layout">
       <style>{`
+        .zone-impression-cachee {
+          position: absolute;
+          left: -9999px;
+          top: 0;
+        }
         @media print {
           body * { visibility: hidden; }
           #zone-impression, #zone-impression * { visibility: visible; }
+          .zone-impression-cachee {
+            position: static;
+            left: auto;
+          }
           #zone-impression {
             position: absolute; top: 0; left: 0; width: 80mm; padding: 8px;
             font-family: 'Courier New', monospace; font-size: 12px; color: #000;
@@ -133,6 +142,41 @@ export default function Caisse() {
         }
         .recu-ligne { display: flex; justify-content: space-between; margin-bottom: 3px; }
         .recu-sep { border-top: 1px dashed #999; margin: 8px 0; }
+
+        .caisse-layout {
+          display: grid;
+          grid-template-columns: 1fr 340px;
+          gap: 14px;
+          align-items: start;
+        }
+        .caisse-ticket {
+          position: sticky;
+          top: 0;
+        }
+
+        /* ── Adaptation mobile / tablette ── */
+        @media (max-width: 900px) {
+          .caisse-layout {
+            grid-template-columns: 1fr;
+          }
+          .caisse-ticket {
+            position: static;
+            order: -1;
+          }
+        }
+        @media (max-width: 480px) {
+          .caisse-panier-ligne {
+            flex-wrap: wrap;
+            row-gap: 8px;
+          }
+          .caisse-panier-nom {
+            width: 100%;
+          }
+          .caisse-panier-prix {
+            width: auto !important;
+            margin-left: auto;
+          }
+        }
       `}</style>
 
       {/* Colonne recherche */}
@@ -150,7 +194,7 @@ export default function Caisse() {
           }}>
             <Icon.Users style={{ width: 15, height: 15 }} />
           </div>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 9.5, fontFamily: 'JetBrains Mono, monospace', letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 3 }}>
               Client (optionnel)
             </div>
@@ -172,10 +216,10 @@ export default function Caisse() {
             type="text"
             value={recherche}
             onChange={(e) => onRecherche(e.target.value)}
-            placeholder="Tapez le nom d'un article (ex : savons, biscuits...)"
+            placeholder="Tapez le nom d'un article..."
             style={{
               width: '100%', border: '1.5px solid var(--border)', borderRadius: 10,
-              padding: '12px 14px', fontSize: 14, color: 'var(--text)', background: 'var(--panel-2)',
+              padding: '13px 14px', fontSize: 16, color: 'var(--text)', background: 'var(--panel-2)',
               outline: 'none', fontFamily: 'Inter, sans-serif',
             }}
           />
@@ -192,17 +236,17 @@ export default function Caisse() {
                   onClick={() => ajouterAuPanier(a)}
                   style={{
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    padding: '11px 14px', cursor: 'pointer', borderBottom: '1px solid var(--border)',
+                    padding: '13px 14px', cursor: 'pointer', borderBottom: '1px solid var(--border)',
                   }}
                   onMouseDown={(e) => e.preventDefault()}
                 >
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{a.nom}</div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text)' }}>{a.nom}</div>
                     <div style={{ fontSize: 11, color: 'var(--muted)' }}>
                       {a.emplacement || 'Emplacement non précisé'} · {a.quantite} en stock
                     </div>
                   </div>
-                  <div style={{ fontWeight: 700, color: 'var(--accent)', fontSize: 13 }}>{f(a.prix_vente)}</div>
+                  <div style={{ fontWeight: 700, color: 'var(--accent)', fontSize: 13.5, flexShrink: 0, marginLeft: 10 }}>{f(a.prix_vente)}</div>
                 </div>
               ))}
             </div>
@@ -222,11 +266,11 @@ export default function Caisse() {
         ) : (
           <div style={{ marginTop: 16 }}>
             {panier.map((l) => (
-              <div key={l.article.id} style={{
+              <div key={l.article.id} className="caisse-panier-ligne" style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '12px 4px', borderBottom: '1px solid var(--border)',
+                padding: '13px 4px', borderBottom: '1px solid var(--border)',
               }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="caisse-panier-nom" style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text)' }}>{l.article.nom}</div>
                   <div style={{ fontSize: 11, color: 'var(--muted)' }}>
                     {l.article.emplacement || 'Emplacement non précisé'} · {f(l.article.prix_vente)} / unité
@@ -237,11 +281,11 @@ export default function Caisse() {
                   <span style={{ minWidth: 22, textAlign: 'center', fontWeight: 700, fontSize: 13 }}>{l.quantite}</span>
                   <button onClick={() => modifierQuantite(l.article.id, 1)} style={qtyBtnStyle}>+</button>
                 </div>
-                <div style={{ width: 90, textAlign: 'right', fontWeight: 700, color: 'var(--accent)', fontSize: 13.5 }}>
+                <div className="caisse-panier-prix" style={{ width: 90, textAlign: 'right', fontWeight: 700, color: 'var(--accent)', fontSize: 13.5 }}>
                   {f(l.article.prix_vente * l.quantite)}
                 </div>
-                <button onClick={() => retirerDuPanier(l.article.id)} style={{ marginLeft: 10, background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer' }}>
-                  <Icon.X style={{ width: 15, height: 15 }} />
+                <button onClick={() => retirerDuPanier(l.article.id)} style={{ marginLeft: 10, background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: 6 }}>
+                  <Icon.X style={{ width: 16, height: 16 }} />
                 </button>
               </div>
             ))}
@@ -250,7 +294,7 @@ export default function Caisse() {
       </div>
 
       {/* Colonne récapitulatif / ticket */}
-      <div className="panel" style={{ position: 'sticky', top: 0 }}>
+      <div className="panel caisse-ticket">
         <div className="panel-head"><h2>Ticket</h2></div>
 
         {error && <div className="alert-error">{error}</div>}
@@ -258,11 +302,11 @@ export default function Caisse() {
         {recu ? (
           <>
             <div className="alert-success">✓ Vente enregistrée — {recu.lignes.length} article(s), {f(recu.total)}</div>
-            <button className="btn-primary" style={{ width: '100%', justifyContent: 'center', marginBottom: 8 }} onClick={imprimer}>
+            <button className="btn-primary" style={{ width: '100%', justifyContent: 'center', marginBottom: 8, padding: '13px' }} onClick={imprimer}>
               <Icon.FilePlus style={{ width: 15, height: 15 }} />
               Imprimer la facture
             </button>
-            <button className="btn-ghost" style={{ width: '100%', justifyContent: 'center' }} onClick={() => setRecu(null)}>
+            <button className="btn-ghost" style={{ width: '100%', justifyContent: 'center', padding: '13px' }} onClick={() => setRecu(null)}>
               Nouvelle vente
             </button>
           </>
@@ -282,7 +326,7 @@ export default function Caisse() {
 
             <button
               className="btn-primary"
-              style={{ width: '100%', justifyContent: 'center', padding: '12px', fontSize: 14 }}
+              style={{ width: '100%', justifyContent: 'center', padding: '14px', fontSize: 14.5 }}
               disabled={panier.length === 0 || loading}
               onClick={valider}
             >
@@ -290,7 +334,7 @@ export default function Caisse() {
             </button>
             <button
               className="btn-ghost"
-              style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
+              style={{ width: '100%', justifyContent: 'center', marginTop: 8, padding: '13px' }}
               disabled={panier.length === 0 || loading}
               onClick={annulerTout}
             >
@@ -300,9 +344,9 @@ export default function Caisse() {
         )}
       </div>
 
-      {/* Zone imprimable, invisible à l'écran normal, visible uniquement lors de l'impression */}
+      {/* Zone imprimable — toujours rendue dans le DOM (cachée hors écran, pas en display:none) */}
       {recu && (
-        <div id="zone-impression" style={{ display: 'none' }}>
+        <div id="zone-impression" className="zone-impression-cachee">
           <div style={{ textAlign: 'center', marginBottom: 10 }}>
             <div style={{ fontWeight: 700, fontSize: 15 }}>{recu.nomEtablissement}</div>
             <div style={{ fontSize: 10, marginTop: 2 }}>Facture de vente</div>
@@ -346,7 +390,7 @@ export default function Caisse() {
 }
 
 const qtyBtnStyle = {
-  width: 26, height: 26, borderRadius: 7, border: '1px solid var(--border)',
-  background: 'var(--panel-2)', color: 'var(--text)', fontSize: 15, fontWeight: 700,
+  width: 30, height: 30, borderRadius: 7, border: '1px solid var(--border)',
+  background: 'var(--panel-2)', color: 'var(--text)', fontSize: 16, fontWeight: 700,
   cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
 }
